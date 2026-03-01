@@ -17,12 +17,30 @@
   --shadow: 0 30px 60px rgba(9, 20, 42, 0.16);
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 #root {
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .aplayplay-app {
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   color: var(--text);
   background:
     radial-gradient(circle at 10% -10%, rgba(255, 212, 0, 0.18), transparent 45%),
@@ -153,6 +171,8 @@
   cursor: pointer;
   transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   text-decoration: none;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .btn:active {
@@ -4419,6 +4439,27 @@
 }
 
 @media (max-width: 640px) {
+  .container {
+    width: calc(100% - 1rem);
+  }
+
+  .site-header {
+    width: calc(100% - 1rem);
+    margin-top: 0.5rem;
+  }
+
+  .btn {
+    white-space: normal;
+    text-align: center;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    max-width: 100%;
+  }
+
   .adminx {
     padding-top: 0.75rem;
   }
@@ -4800,6 +4841,22 @@
   .public-driver-booking__bar {
     align-items: start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    width: calc(100% - 0.75rem);
+  }
+
+  .site-header {
+    width: calc(100% - 0.75rem);
+    padding: 0.65rem;
+  }
+
+  .site-nav a {
+    font-size: 0.82rem;
+    padding: 0.42rem 0.62rem;
   }
 }
 
