@@ -107,7 +107,7 @@ function AdminTraderPage() {
 
     let cancelled = false
 
-    async function loadAdminData() {
+  async function loadAdminData() {
       try {
         const [driversRes, passengersRes] = await Promise.all([
           getAdminDrivers(),
@@ -124,7 +124,15 @@ function AdminTraderPage() {
         setPassengers(apiPassengers)
       } catch (error) {
         if (!cancelled) {
-          setAdminNotice(error.message || 'Nao foi possivel carregar dados do admin na API.')
+          const message = String(error?.message || 'Nao foi possivel carregar dados do admin na API.')
+          const isAuthExpired = /sessao invalida|token ausente|401|credenciais/i.test(message)
+          if (isAuthExpired) {
+            localStorage.removeItem(ADMIN_AUTH_KEY)
+            setIsAdminAuthenticated(false)
+            setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+          } else {
+            setAdminNotice(message)
+          }
           const localDrivers = readJson(DRIVER_LIST_KEY, [])
           setDrivers(Array.isArray(localDrivers) ? localDrivers : [])
         }
@@ -238,7 +246,14 @@ function AdminTraderPage() {
       if (!updated) return
       setDrivers((current) => current.map((driver) => (String(driver.id) === String(driverId) ? updated : driver)))
     } catch (error) {
-      setAdminNotice(error.message || 'Nao foi possivel atualizar motorista na API.')
+      const message = String(error?.message || 'Nao foi possivel atualizar motorista na API.')
+      if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
+        localStorage.removeItem(ADMIN_AUTH_KEY)
+        setIsAdminAuthenticated(false)
+        setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+        return
+      }
+      setAdminNotice(message)
     }
   }
 
@@ -270,7 +285,14 @@ function AdminTraderPage() {
       }
       setAdminNotice('Status do passageiro atualizado.')
     } catch (error) {
-      setAdminNotice(error.message || 'Nao foi possivel atualizar passageiro na API.')
+      const message = String(error?.message || 'Nao foi possivel atualizar passageiro na API.')
+      if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
+        localStorage.removeItem(ADMIN_AUTH_KEY)
+        setIsAdminAuthenticated(false)
+        setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+        return
+      }
+      setAdminNotice(message)
     }
   }
 
@@ -280,7 +302,14 @@ function AdminTraderPage() {
       setPassengers((current) => current.filter((item) => item.id !== passenger.id))
       setAdminNotice('Passageiro removido do painel.')
     } catch (error) {
-      setAdminNotice(error.message || 'Nao foi possivel remover passageiro na API.')
+      const message = String(error?.message || 'Nao foi possivel remover passageiro na API.')
+      if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
+        localStorage.removeItem(ADMIN_AUTH_KEY)
+        setIsAdminAuthenticated(false)
+        setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+        return
+      }
+      setAdminNotice(message)
     }
   }
 
