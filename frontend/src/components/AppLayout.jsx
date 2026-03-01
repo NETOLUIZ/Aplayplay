@@ -22,7 +22,8 @@ function AppLayout() {
 
             <nav className="site-nav site-nav--main" aria-label="Modulos do sistema">
               <NavLink to="/home">Home</NavLink>
-              <NavLink to="/passageiro">Passageiro</NavLink>
+              <NavLink to="/login">Login Passageiro</NavLink>
+              <NavLink to="/passageiro/motoristas">Meus Motoristas</NavLink>
               <NavLink to="/motorista/login">Motorista</NavLink>
               <NavLink to="/admin/trader">Admin</NavLink>
             </nav>

@@ -11,6 +11,7 @@ function PassengerLoginPage() {
   const motoristaId = String(searchParams.get('motoristaId') || '').trim()
   const [telefone, setTelefone] = useState('')
   const [senha, setSenha] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -65,7 +66,22 @@ function PassengerLoginPage() {
             </label>
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
               <span>Senha</span>
-              <input type="password" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" value={senha} onChange={(e) => setSenha(e.target.value)} />
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  onClick={() => setShowPassword((current) => !current)}
+                >
+                  {showPassword ? '🙈' : '👁'}
+                </button>
+              </div>
             </label>
 
             {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600">{error}</p>}

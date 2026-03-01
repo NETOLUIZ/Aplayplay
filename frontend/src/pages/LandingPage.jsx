@@ -70,54 +70,6 @@ function LandingPage() {
         </div>
       </section>
 
-      <section className="container py-10 md:py-12" aria-label="Modulos do sistema">
-        <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm md:p-8">
-          <div className="mb-6 md:mb-8">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Estrutura do Projeto</p>
-            <h2 className="mt-2 text-2xl font-extrabold text-slate-900 md:text-3xl">
-              Paginas organizadas por area
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600 md:text-base">
-              Fluxo padrao por modulo para facilitar manutencao e evolucao do produto.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-lg font-bold text-slate-900">Home</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Landing principal com proposta de valor, recursos e entrada para os fluxos.
-              </p>
-              <Link className="mt-4 inline-flex text-sm font-semibold text-blue-700" to="/home">Abrir Home</Link>
-            </article>
-
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-lg font-bold text-slate-900">Passageiro</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Solicitar corrida com mapa, origem automatica, destino, estimativa e chat.
-              </p>
-              <Link className="mt-4 inline-flex text-sm font-semibold text-blue-700" to="/passageiro">Abrir Passageiro</Link>
-            </article>
-
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-lg font-bold text-slate-900">Motorista</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Login, dashboard operacional, corridas recebidas e compartilhamento de link/QR.
-              </p>
-              <Link className="mt-4 inline-flex text-sm font-semibold text-blue-700" to="/motorista/login">Abrir Motorista</Link>
-            </article>
-
-            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-lg font-bold text-slate-900">Admin</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Gestao de motoristas, passageiros e regras de tarifa no painel trader.
-              </p>
-              <Link className="mt-4 inline-flex text-sm font-semibold text-blue-700" to="/admin/trader">Abrir Admin</Link>
-            </article>
-          </div>
-        </div>
-      </section>
-
       <section className="stats" aria-label="Metricas">
         <div className="container stats__grid">
           {marketingStats.map(([value, label]) => (
