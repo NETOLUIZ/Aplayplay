@@ -648,6 +648,9 @@ function BookingRequestDemoPage() {
   const [trafficNotice, setTrafficNotice] = useState('')
   const allowPassengerSignup = Boolean(slug)
   const apiEnabled = isApiEnabled()
+  const linkedDriverSlug = String(passengerAccount?.driverSlug || '').trim().toLowerCase()
+  const activeDriverSlug = String(slug || linkedDriverSlug || '').trim().toLowerCase()
+  const hasDriverLink = Boolean(activeDriverSlug)
   const fallbackDriverProfile = useMemo(
     () => ({
       fullName: searchParams.get('driver') || 'Motorista parceiro',
@@ -715,12 +718,12 @@ function BookingRequestDemoPage() {
     return 'livre'
   }, [selectedTripRoute])
   const estimatedFare = useMemo(
-    () => (
+    () => (hasDriverLink ? (
       tariffs.displacementFee
       + tripDistanceKm * tariffs.perKm
       + estimatedDurationMin * tariffs.perMinute
-    ),
-    [tariffs, tripDistanceKm, estimatedDurationMin],
+    ) : 0),
+    [hasDriverLink, tariffs, tripDistanceKm, estimatedDurationMin],
   )
   const estimatedFareLabel = formatCurrencyBRL(estimatedFare)
 
@@ -732,11 +735,11 @@ function BookingRequestDemoPage() {
     let cancelled = false
 
     async function loadDriverBySlug() {
-      if (!slug) return
+      if (!activeDriverSlug) return
 
       if (apiEnabled) {
         try {
-          const result = await getPublicDriverBySlug(slug)
+          const result = await getPublicDriverBySlug(activeDriverSlug)
           const driver = result?.driver
           if (!cancelled && driver) {
             setDriverProfile((current) => ({
@@ -758,7 +761,7 @@ function BookingRequestDemoPage() {
 
       const localDriver = readJson(DRIVER_ACCOUNT_KEY, null)
       const localSlug = String(localDriver?.slug || '').trim().toLowerCase()
-      const targetSlug = String(slug || '').trim().toLowerCase()
+      const targetSlug = String(activeDriverSlug || '').trim().toLowerCase()
       if (!cancelled && localDriver && localSlug && localSlug === targetSlug) {
         setDriverProfile((current) => ({
           ...current,
@@ -778,7 +781,7 @@ function BookingRequestDemoPage() {
     return () => {
       cancelled = true
     }
-  }, [slug, apiEnabled])
+  }, [activeDriverSlug, apiEnabled])
 
   async function syncPassengerLocationAfterLogin() {
     setGeoFeedback('Obtendo sua localizacao...')
@@ -1199,6 +1202,7 @@ function BookingRequestDemoPage() {
       status: 'active',
       joinedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
+      driverSlug: slug,
     }
 
     if (apiEnabled) {
@@ -1276,12 +1280,19 @@ function BookingRequestDemoPage() {
           password: clientPassword,
         })
         const loggedPassenger = result?.passenger || passengerAccount
+        const linkedSlug = String(loggedPassenger?.driverSlug || slug || '').trim().toLowerCase()
+        if (!linkedSlug) {
+          setAuthError('Conta sem motorista vinculado. Faca o primeiro cadastro pelo QR code do motorista.')
+          setShowClientLogin(true)
+          return
+        }
         if (result?.token) {
           localStorage.setItem(PASSENGER_TOKEN_KEY, result.token)
         }
         if (loggedPassenger) {
-          writeJson(PASSENGER_STORAGE_KEY, loggedPassenger)
-          setPassengerAccount(loggedPassenger)
+          const normalizedPassenger = { ...loggedPassenger, driverSlug: linkedSlug }
+          writeJson(PASSENGER_STORAGE_KEY, normalizedPassenger)
+          setPassengerAccount(normalizedPassenger)
         }
         setIsPassengerLoggedIn(true)
         setShowClientLogin(false)
@@ -1301,6 +1312,14 @@ function BookingRequestDemoPage() {
       setAuthError('Credenciais invalidas.')
       return
     }
+    const linkedSlug = String(passengerAccount?.driverSlug || slug || '').trim().toLowerCase()
+    if (!linkedSlug) {
+      setAuthError('Conta sem motorista vinculado. Faca o primeiro cadastro pelo QR code do motorista.')
+      return
+    }
+    const normalizedPassenger = { ...passengerAccount, driverSlug: linkedSlug }
+    writeJson(PASSENGER_STORAGE_KEY, normalizedPassenger)
+    setPassengerAccount(normalizedPassenger)
     setIsPassengerLoggedIn(true)
     setShowClientLogin(false)
     setRideFeedback(`Bem-vindo, ${passengerAccount.fullName}. Voce ja pode solicitar sua corrida.`)
@@ -1316,12 +1335,17 @@ function BookingRequestDemoPage() {
       setAuthError('Para solicitar corrida, faca login. Cadastro so pelo QR code do motorista.')
       return
     }
+    if (!hasDriverLink) {
+      setRideFeedback('Conta sem motorista vinculado. Use o QR code do motorista para vincular e solicitar.')
+      return
+    }
 
     const requestId = Date.now()
     const request = {
       id: requestId,
       passengerName: passengerAccount?.fullName || 'Passageiro',
       passengerEmail: passengerAccount?.email || '',
+      driverSlug: activeDriverSlug,
       driverName,
       origin,
       destination: destination || 'Destino a confirmar',
@@ -1767,6 +1791,9 @@ function BookingRequestDemoPage() {
                       ? `Passageiro autenticado: ${passengerAccount?.fullName ?? 'Conta ativa'}`
                       : 'Passageiro nao autenticado. Faca cadastro/login para solicitar.'}
                   </p>
+                  {isPassengerLoggedIn && !hasDriverLink && (
+                    <p className="booking-card__status">Conta sem motorista vinculado. Primeiro acesso deve ser pelo QR code.</p>
+                  )}
                 </header>
 
                 <div className="booking-card__fields">
@@ -1941,7 +1968,7 @@ function BookingRequestDemoPage() {
                 </div>
 
                 <button className="booking-card__submit" type="button" onClick={handleRequestRide}>
-                  <span>{isPassengerLoggedIn ? `Solicitar Corrida (${estimatedFareLabel})` : 'Cadastro/Login para Solicitar'}</span>
+                  <span>{isPassengerLoggedIn ? (hasDriverLink ? `Solicitar Corrida (${estimatedFareLabel})` : 'Vincule com QR para Solicitar') : 'Cadastro/Login para Solicitar'}</span>
                   <span>{'>'}</span>
                 </button>
 
