@@ -44,6 +44,10 @@ function slugify(text) {
     .replace(/^-+|-+$/g, '')
 }
 
+function normalizePhone(value) {
+  return String(value || '').replace(/\D/g, '')
+}
+
 function createToken() {
   return crypto.randomBytes(24).toString('hex')
 }
@@ -305,7 +309,7 @@ app.post('/api/passengers/signup', (req, res) => {
   const fullName = String(req.body?.fullName || '').trim()
   const email = String(req.body?.email || '').trim().toLowerCase()
   const password = String(req.body?.password || '').trim()
-  const phone = String(req.body?.phone || '').trim()
+  const phone = normalizePhone(req.body?.phone)
   const address = String(req.body?.address || '').trim()
   const driverSlug = String(req.body?.driverSlug || '').trim().toLowerCase()
 
@@ -321,7 +325,7 @@ app.post('/api/passengers/signup', (req, res) => {
     res.status(409).json({ error: 'Ja existe passageiro com esse e-mail.' })
     return
   }
-  if (phone && passengers.some((item) => item.phone === phone)) {
+  if (phone && passengers.some((item) => normalizePhone(item.phone) === phone)) {
     res.status(409).json({ error: 'Ja existe passageiro com esse telefone.' })
     return
   }
@@ -355,13 +359,13 @@ app.post('/api/passengers/signup', (req, res) => {
 
 app.post('/api/passengers/login', (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
-  const phone = String(req.body?.phone || '').trim()
+  const phone = normalizePhone(req.body?.phone)
   const password = String(req.body?.password || '').trim()
   const passenger = passengers.find((item) => (
     item.password === password
     && (
       (email && String(item.email || '').trim().toLowerCase() === email)
-      || (phone && String(item.phone || '').trim() === phone)
+      || (phone && normalizePhone(item.phone) === phone)
     )
   ))
   if (!passenger) {
@@ -384,7 +388,7 @@ app.post('/api/passengers/login', (req, res) => {
 
 app.post('/api/auth/register', (req, res) => {
   const fullName = String(req.body?.nome || req.body?.fullName || '').trim()
-  const phone = String(req.body?.telefone || req.body?.phone || '').trim()
+  const phone = normalizePhone(req.body?.telefone || req.body?.phone)
   const password = String(req.body?.senha || req.body?.password || '').trim()
   const address = String(req.body?.address || '').trim()
   const driverIdentifier = String(
@@ -441,7 +445,7 @@ app.post('/api/auth/register', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
-  const phone = String(req.body?.telefone || req.body?.phone || '').trim()
+  const phone = normalizePhone(req.body?.telefone || req.body?.phone)
   const password = String(req.body?.senha || req.body?.password || '').trim()
 
   if (!password || (!email && !phone)) {
@@ -453,7 +457,7 @@ app.post('/api/auth/login', (req, res) => {
     item.password === password
     && (
       (email && String(item.email || '').trim().toLowerCase() === email)
-      || (phone && String(item.phone || '').trim() === phone)
+      || (phone && normalizePhone(item.phone) === phone)
     )
   ))
   if (!passenger) {
