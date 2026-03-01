@@ -1,0 +1,643 @@
+﻿
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa Interativo de Rotas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+  <style>
+    :root {
+      --bg-a:#0f0c29; --bg-b:#302b63; --bg-c:#24243e;
+      --glass:rgba(255,255,255,.14); --glass-b:rgba(255,255,255,.22);
+      --text:#f8fafc; --muted:#dbeafe;
+      --route-car:#6366f1; --route-bike:#22c55e; --route-foot:#f97316;
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; margin:0; color:var(--text); font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    body { overflow:hidden; background:linear-gradient(130deg,var(--bg-a),var(--bg-b),var(--bg-c)); background-attachment:fixed; }
+    .layout { height:100%; display:grid; grid-template-columns:320px 1fr; gap:14px; padding:14px; }
+    #sidebar { border-radius:16px; border:1px solid var(--glass-b); background:var(--glass); backdrop-filter:blur(14px); box-shadow:0 14px 35px rgba(7,10,24,.45),0 3px 10px rgba(7,10,24,.35); overflow:auto; padding:16px; }
+    #sidebar::-webkit-scrollbar { width:7px; }
+    #sidebar::-webkit-scrollbar-thumb { background:rgba(148,163,184,.45); border-radius:999px; }
+    .title { margin:0; font-size:1.08rem; font-weight:800; }
+    .subtitle { margin:4px 0 14px; font-size:.82rem; color:var(--muted); }
+    .lbl { font-size:.76rem; font-weight:700; margin-bottom:6px; color:#e2e8f0; text-transform:uppercase; letter-spacing:.03em; }
+    .group { margin-top:12px; }
+    .input-wrap { position:relative; }
+    .icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); pointer-events:none; font-size:.9rem; }
+    .icon.o { color:#22c55e; } .icon.d { color:#ef4444; }
+    .route-input { width:100%; min-height:44px; border:1px solid rgba(203,213,225,.35); border-radius:12px; background:rgba(15,23,42,.42); color:#f8fafc; font-size:.92rem; padding:10px 12px 10px 36px; outline:none; transition:.2s; }
+    .route-input:focus { border-color:rgba(165,180,252,.65); box-shadow:0 0 0 3px rgba(99,102,241,.25); transform:translateY(-1px); }
+    .suggestions { display:none; margin-top:6px; border:1px solid rgba(203,213,225,.2); border-radius:12px; background:rgba(15,23,42,.95); overflow:hidden; }
+    .suggestions.show { display:block; animation:fadeIn .2s ease; }
+    .sg-item { width:100%; min-height:44px; border:0; background:transparent; color:#e2e8f0; text-align:left; padding:10px 12px; font-size:.84rem; cursor:pointer; }
+    .sg-item:hover { background:rgba(99,102,241,.2); }
+    .btn { width:100%; min-height:44px; border-radius:12px; border:1px solid transparent; font-size:.9rem; font-weight:700; cursor:pointer; transition:.2s; }
+    .btn:hover { transform:translateY(-2px); filter:brightness(1.02); }
+    .btn-primary { color:#fff; background:linear-gradient(135deg,#2563eb,#7c3aed); box-shadow:0 10px 20px rgba(37,99,235,.3); }
+    .btn-soft { color:#e2e8f0; background:rgba(15,23,42,.6); border-color:rgba(203,213,225,.2); }
+    .btn-loc { color:#d1fae5; background:linear-gradient(135deg,#065f46,#0f766e); box-shadow:0 10px 18px rgba(6,95,70,.35); }
+    .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+    .mode { min-height:44px; border-radius:11px; border:1px solid rgba(203,213,225,.25); background:rgba(15,23,42,.6); color:#e2e8f0; font-size:.8rem; font-weight:700; cursor:pointer; }
+    .mode.active { background:rgba(99,102,241,.3); border-color:rgba(165,180,252,.7); color:#fff; }
+    .divider { margin:12px 0; height:1px; background:rgba(203,213,225,.2); }
+    .result { margin-top:14px; border-radius:14px; border:1px solid rgba(203,213,225,.22); background:rgba(15,23,42,.28); padding:12px; box-shadow:0 10px 22px rgba(2,6,23,.35); opacity:0; transform:translateY(6px); pointer-events:none; transition:.25s; }
+    .result.show { opacity:1; transform:translateY(0); pointer-events:auto; }
+    .r-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+    .metric { border-radius:11px; padding:10px 8px; background:rgba(15,23,42,.55); border:1px solid rgba(203,213,225,.18); text-align:center; }
+    .metric small { display:block; font-size:.66rem; color:#cbd5e1; margin-bottom:4px; text-transform:uppercase; }
+    .metric strong { font-size:.88rem; color:#fff; }
+    .toggle { width:100%; min-height:44px; margin-top:10px; border:1px solid rgba(203,213,225,.25); border-radius:10px; background:rgba(15,23,42,.58); color:#f8fafc; font-size:.82rem; font-weight:700; cursor:pointer; text-align:left; padding:0 12px; }
+    .steps { margin-top:8px; max-height:0; overflow:hidden; transition:max-height .28s ease; }
+    .steps.open { max-height:220px; overflow:auto; }
+    .steps ul { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+    .steps li { border:1px solid rgba(203,213,225,.2); border-radius:9px; padding:8px; font-size:.78rem; background:rgba(15,23,42,.52); color:#e2e8f0; }
+    #map-wrap { position:relative; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.15); box-shadow:0 14px 35px rgba(7,10,24,.45),0 3px 10px rgba(7,10,24,.35); }
+    #map { width:100%; height:100%; }
+    .leaflet-routing-container { display:none !important; }
+    .zoom-box { position:absolute; right:14px; bottom:14px; z-index:999; display:grid; gap:8px; }
+    .zbtn { width:44px; height:44px; border:1px solid rgba(203,213,225,.25); border-radius:12px; background:rgba(15,23,42,.8); color:#fff; cursor:pointer; font-size:1rem; box-shadow:0 10px 18px rgba(2,6,23,.35); transition:.2s; }
+    .zbtn:hover { transform:translateY(-2px); background:rgba(30,41,59,.9); }
+    .pulse { position:relative; width:16px; height:16px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 2px rgba(255,255,255,.5); }
+    .pulse::after { content:""; position:absolute; inset:-7px; border-radius:50%; animation:pulse 1.6s infinite; opacity:.5; }
+    .pulse.o { background:#22c55e; } .pulse.o::after { border:2px solid rgba(34,197,94,.7); }
+    .pulse.d { background:#ef4444; } .pulse.d::after { border:2px solid rgba(239,68,68,.7); }
+    .route-flow { stroke-dasharray:16 10; animation:routeFlow 1.9s linear infinite; }
+    .leaflet-interactive.route-outline { filter:drop-shadow(0 0 3px rgba(255,255,255,.8)); }
+    #loading-overlay { position:fixed; inset:0; z-index:3000; display:none; align-items:center; justify-content:center; background:rgba(2,6,23,.5); backdrop-filter:blur(2px); }
+    #loading-overlay.show { display:flex; }
+    .spinner { width:56px; height:56px; border-radius:50%; border:4px solid rgba(255,255,255,.18); border-top-color:#a5b4fc; animation:spin .9s linear infinite; }
+    #toasts { position:fixed; top:12px; right:12px; z-index:3500; display:grid; gap:8px; width:min(320px,calc(100vw - 24px)); }
+    .toast { border-radius:11px; padding:10px 12px; font-size:.83rem; font-weight:600; color:#fff; border:1px solid rgba(255,255,255,.15); background:rgba(15,23,42,.88); box-shadow:0 10px 22px rgba(2,6,23,.35); animation:toastIn .24s ease; }
+    .toast.success { background:rgba(5,150,105,.92); }
+    .toast.error { background:rgba(220,38,38,.92); }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @keyframes pulse { 0%{transform:scale(.72);opacity:.7} 80%{transform:scale(1.55);opacity:0} 100%{transform:scale(1.55);opacity:0} }
+    @keyframes routeFlow { to { stroke-dashoffset:-52; } }
+    @keyframes toastIn { from {opacity:0;transform:translateY(-6px)} to {opacity:1;transform:translateY(0)} }
+    @keyframes fadeIn { from {opacity:0;transform:translateY(-4px)} to {opacity:1;transform:translateY(0)} }
+    @media (max-width: 767px) {
+      body { overflow:auto; }
+      .layout { height:auto; min-height:100vh; grid-template-columns:1fr; grid-template-rows:auto minmax(360px,1fr); }
+      #sidebar { max-height:52vh; }
+      #map-wrap { min-height:58vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar">
+      <h1 class="title">Rota Inteligente</h1>
+      <p class="subtitle">Leaflet + OSM + OSRM + Nominatim</p>
+
+      <div class="group">
+        <div class="lbl">Origem</div>
+        <div class="input-wrap">
+          <i class="fa-solid fa-location-dot icon o"></i>
+          <input id="origin-input" class="route-input" type="text" placeholder="Digite a origem..." autocomplete="off" />
+        </div>
+        <div id="origin-suggestions" class="suggestions"></div>
+      </div>
+
+      <div class="group">
+        <div class="lbl">Destino</div>
+        <div class="input-wrap">
+          <i class="fa-solid fa-location-dot icon d"></i>
+          <input id="destination-input" class="route-input" type="text" placeholder="Digite o destino..." autocomplete="off" />
+        </div>
+        <div id="destination-suggestions" class="suggestions"></div>
+      </div>
+
+      <div class="group">
+        <div class="lbl">Transporte</div>
+        <div class="modes" id="transport-grid">
+          <button class="mode active" data-mode="car" type="button">🚗 Carro</button>
+          <button class="mode" data-mode="bike" type="button">🚴 Bicicleta</button>
+          <button class="mode" data-mode="foot" type="button">🚶 A pé</button>
+        </div>
+      </div>
+
+      <div class="group grid gap-2">
+        <button id="btn-calc" type="button" class="btn btn-primary"><i class="fa-solid fa-route mr-2"></i>Calcular Rota</button>
+        <button id="btn-location" type="button" class="btn btn-loc"><i class="fa-solid fa-location-crosshairs mr-2"></i>Minha Localização</button>
+        <button id="btn-clear" type="button" class="btn btn-soft"><i class="fa-solid fa-eraser mr-2"></i>Limpar</button>
+        <button id="btn-copy" type="button" class="btn btn-soft"><i class="fa-solid fa-link mr-2"></i>Copiar link da rota</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <section id="result" class="result">
+        <h2 class="text-sm font-bold m-0">Resumo da Rota</h2>
+        <div class="r-grid">
+          <div class="metric"><small>Distância</small><strong id="distance-v">--</strong></div>
+          <div class="metric"><small>Tempo</small><strong id="duration-v">--</strong></div>
+          <div class="metric"><small>Curvas</small><strong id="steps-v">--</strong></div>
+        </div>
+        <button id="toggle-steps" type="button" class="toggle"><i class="fa-solid fa-list-check mr-2"></i>Mostrar instruções</button>
+        <div id="steps-wrap" class="steps"><ul id="steps-list"></ul></div>
+      </section>
+    </aside>
+
+    <section id="map-wrap">
+      <div id="map"></div>
+      <div class="zoom-box">
+        <button id="zoom-in" class="zbtn" type="button" aria-label="Aumentar zoom"><i class="fa-solid fa-plus"></i></button>
+        <button id="zoom-out" class="zbtn" type="button" aria-label="Diminuir zoom"><i class="fa-solid fa-minus"></i></button>
+      </div>
+    </section>
+  </div>
+
+  <div id="loading-overlay"><div class="spinner" aria-label="Carregando"></div></div>
+  <div id="toasts" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    const State = {
+      map: null,
+      routingControl: null,
+      originMarker: null,
+      destinationMarker: null,
+      origin: null,
+      destination: null,
+      clickStep: 0,
+      mode: "car",
+      lastRoute: null,
+    };
+
+    const TRANSPORT = {
+      car: { profile: "driving", color: "#6366f1", label: "Carro" },
+      bike: { profile: "cycling", color: "#22c55e", label: "Bicicleta" },
+      foot: { profile: "walking", color: "#f97316", label: "A pé" },
+    };
+
+    const UI = {
+      el: {},
+      init() {
+        this.el.originInput = document.getElementById("origin-input");
+        this.el.destinationInput = document.getElementById("destination-input");
+        this.el.originSuggestions = document.getElementById("origin-suggestions");
+        this.el.destinationSuggestions = document.getElementById("destination-suggestions");
+        this.el.btnCalc = document.getElementById("btn-calc");
+        this.el.btnClear = document.getElementById("btn-clear");
+        this.el.btnLoc = document.getElementById("btn-location");
+        this.el.btnCopy = document.getElementById("btn-copy");
+        this.el.loading = document.getElementById("loading-overlay");
+        this.el.toasts = document.getElementById("toasts");
+        this.el.result = document.getElementById("result");
+        this.el.distance = document.getElementById("distance-v");
+        this.el.duration = document.getElementById("duration-v");
+        this.el.steps = document.getElementById("steps-v");
+        this.el.toggleSteps = document.getElementById("toggle-steps");
+        this.el.stepsWrap = document.getElementById("steps-wrap");
+        this.el.stepsList = document.getElementById("steps-list");
+        this.el.transportGrid = document.getElementById("transport-grid");
+        this.el.zoomIn = document.getElementById("zoom-in");
+        this.el.zoomOut = document.getElementById("zoom-out");
+      },
+      loading(show) {
+        this.el.loading.classList.toggle("show", !!show);
+      },
+      toast(message, type = "success", time = 2800) {
+        const t = document.createElement("div");
+        t.className = `toast ${type}`;
+        t.textContent = message;
+        this.el.toasts.appendChild(t);
+        setTimeout(() => {
+          t.style.opacity = "0";
+          t.style.transform = "translateY(-4px)";
+          setTimeout(() => t.remove(), 220);
+        }, time);
+      },
+      setInput(kind, value) {
+        if (kind === "origin") this.el.originInput.value = value || "";
+        if (kind === "destination") this.el.destinationInput.value = value || "";
+      },
+      hideSuggestions(kind) {
+        const box = kind === "origin" ? this.el.originSuggestions : this.el.destinationSuggestions;
+        box.classList.remove("show");
+      },
+      suggestions(kind, list) {
+        const box = kind === "origin" ? this.el.originSuggestions : this.el.destinationSuggestions;
+        box.innerHTML = "";
+        if (!list || list.length === 0) {
+          box.classList.remove("show");
+          return;
+        }
+        list.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "sg-item";
+          btn.textContent = item.display_name;
+          btn.dataset.lat = item.lat;
+          btn.dataset.lon = item.lon;
+          btn.dataset.name = item.display_name;
+          btn.dataset.kind = kind;
+          box.appendChild(btn);
+        });
+        box.classList.add("show");
+      },
+      setMode(mode) {
+        this.el.transportGrid.querySelectorAll(".mode").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.mode === mode);
+        });
+      },
+      setResult(summary, instructions) {
+        this.el.result.classList.add("show");
+        this.el.distance.textContent = summary.distance;
+        this.el.duration.textContent = summary.duration;
+        this.el.steps.textContent = String(summary.steps);
+        this.el.stepsList.innerHTML = "";
+        instructions.forEach((step, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${i + 1}.</strong> ${step.text || "Siga em frente"} <em>(${step.distance})</em>`;
+          this.el.stepsList.appendChild(li);
+        });
+      },
+      clearResult() {
+        this.el.result.classList.remove("show");
+        this.el.stepsWrap.classList.remove("open");
+        this.el.toggleSteps.innerHTML = '<i class="fa-solid fa-list-check mr-2"></i>Mostrar instruções';
+        this.el.stepsList.innerHTML = "";
+        this.el.distance.textContent = "--";
+        this.el.duration.textContent = "--";
+        this.el.steps.textContent = "--";
+      },
+      toggleSteps() {
+        const open = this.el.stepsWrap.classList.toggle("open");
+        this.el.toggleSteps.innerHTML = open
+          ? '<i class="fa-solid fa-chevron-up mr-2"></i>Ocultar instruções'
+          : '<i class="fa-solid fa-list-check mr-2"></i>Mostrar instruções';
+      },
+    };
+
+    const MapController = {
+      init() {
+        State.map = L.map("map", { center: [-23.5505, -46.6333], zoom: 12, zoomControl: false });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(State.map);
+        State.map.on("click", this.onClickMap);
+      },
+      onClickMap(e) {
+        const { lat, lng } = e.latlng;
+        if (State.clickStep === 0) {
+          RoutingController.setOrigin(lat, lng, "Origem selecionada no mapa");
+          State.clickStep = 1;
+          UI.toast("Origem definida. Agora selecione o destino.");
+        } else {
+          RoutingController.setDestination(lat, lng, "Destino selecionado no mapa");
+          State.clickStep = 0;
+          UI.toast("Destino definido. Clique em Calcular Rota.");
+        }
+      },
+      icon(kind) {
+        const cls = kind === "origin" ? "pulse o" : "pulse d";
+        return L.divIcon({ className: "", html: `<div class="${cls}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+      },
+      marker(kind, lat, lng) {
+        const key = kind === "origin" ? "originMarker" : "destinationMarker";
+        if (State[key]) State[key].remove();
+        State[key] = L.marker([lat, lng], { icon: this.icon(kind) }).addTo(State.map);
+      },
+      clearMarkers() {
+        if (State.originMarker) State.originMarker.remove();
+        if (State.destinationMarker) State.destinationMarker.remove();
+        State.originMarker = null;
+        State.destinationMarker = null;
+      },
+      fly(lat, lng, zoom = 14) {
+        State.map.flyTo([lat, lng], zoom, { animate: true, duration: 0.6 });
+      },
+    };
+
+    const RoutingController = {
+      setOrigin(lat, lng, label) {
+        State.origin = { lat, lng };
+        MapController.marker("origin", lat, lng);
+        if (label) UI.setInput("origin", label);
+      },
+      setDestination(lat, lng, label) {
+        State.destination = { lat, lng };
+        MapController.marker("destination", lat, lng);
+        if (label) UI.setInput("destination", label);
+      },
+      canRoute() {
+        return !!(State.origin && State.destination);
+      },
+      updateHash() {
+        if (!this.canRoute()) return;
+        window.location.hash = [
+          State.origin.lat.toFixed(6),
+          State.origin.lng.toFixed(6),
+          State.destination.lat.toFixed(6),
+          State.destination.lng.toFixed(6),
+        ].join(",");
+      },
+      clearRoute() {
+        if (State.routingControl) {
+          State.map.removeControl(State.routingControl);
+          State.routingControl = null;
+        }
+        State.origin = null;
+        State.destination = null;
+        State.clickStep = 0;
+        MapController.clearMarkers();
+        UI.setInput("origin", "");
+        UI.setInput("destination", "");
+        UI.clearResult();
+        window.location.hash = "";
+      },
+      setMode(mode) {
+        if (!TRANSPORT[mode]) return;
+        State.mode = mode;
+        UI.setMode(mode);
+        if (this.canRoute()) this.calculate();
+      },
+      async resolvePointsFromInputs() {
+        const resolveOne = async (kind) => {
+          const hasPoint = kind === "origin" ? !!State.origin : !!State.destination;
+          if (hasPoint) return true;
+
+          const inputValue = kind === "origin" ? UI.el.originInput.value : UI.el.destinationInput.value;
+          const query = String(inputValue || "").trim();
+          if (query.length < 3) return false;
+
+          try {
+            const list = await GeocodingController.search(query);
+            const first = Array.isArray(list) ? list[0] : null;
+            if (!first) return false;
+            const lat = Number(first.lat);
+            const lng = Number(first.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+            if (kind === "origin") this.setOrigin(lat, lng, first.display_name);
+            if (kind === "destination") this.setDestination(lat, lng, first.display_name);
+            return true;
+          } catch {
+            return false;
+          }
+        };
+
+        const originOk = await resolveOne("origin");
+        const destinationOk = await resolveOne("destination");
+        return originOk && destinationOk;
+      },
+      async calculate() {
+        if (!this.canRoute()) {
+          UI.loading(true);
+          const resolved = await this.resolvePointsFromInputs();
+          UI.loading(false);
+          if (!resolved || !this.canRoute()) {
+            UI.toast("Digite e selecione origem/destino ou clique no mapa para calcular.", "error");
+            return;
+          }
+        }
+        if (State.routingControl) {
+          State.map.removeControl(State.routingControl);
+          State.routingControl = null;
+        }
+
+        const cfg = TRANSPORT[State.mode];
+        State.routingControl = L.Routing.control({
+          waypoints: [L.latLng(State.origin.lat, State.origin.lng), L.latLng(State.destination.lat, State.destination.lng)],
+          routeWhileDragging: false,
+          show: false,
+          addWaypoints: false,
+          fitSelectedRoutes: true,
+          router: L.Routing.osrmv1({
+            serviceUrl: "https://router.project-osrm.org/route/v1",
+            profile: cfg.profile,
+            language: "pt-BR",
+          }),
+          lineOptions: {
+            styles: [
+              { color: "#ffffff", opacity: 0.95, weight: 10, className: "route-outline" },
+              { color: cfg.color, opacity: 0.85, weight: 6, className: "route-flow" },
+            ],
+          },
+          createMarker: () => null,
+        }).addTo(State.map);
+
+        State.routingControl.on("routingstart", () => UI.loading(true));
+        State.routingControl.on("routesfound", (e) => {
+          UI.loading(false);
+          const route = e.routes && e.routes[0];
+          if (!route) {
+            UI.toast("Nao foi possivel montar a rota.", "error");
+            return;
+          }
+
+          const distanceKm = route.summary.totalDistance / 1000;
+          const totalMin = Math.round(route.summary.totalTime / 60);
+          const duration = totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}min` : `${totalMin} min`;
+          const instructions = (route.instructions || []).map((step) => {
+            const km = step.distance / 1000;
+            return {
+              text: step.text || "Continue",
+              distance: km < 1 ? `${Math.round(step.distance)} m` : `${km.toFixed(1)} km`,
+            };
+          });
+
+          UI.setResult({ distance: `${distanceKm.toFixed(2)} km`, duration, steps: instructions.length }, instructions);
+
+          State.lastRoute = {
+            origin: State.origin,
+            destination: State.destination,
+            mode: State.mode,
+            summary: route.summary,
+            instructions,
+          };
+          localStorage.setItem("interactive_route_last", JSON.stringify(State.lastRoute));
+          RoutingController.updateHash();
+          UI.toast(`Rota calculada (${cfg.label}).`);
+        });
+
+        State.routingControl.on("routingerror", () => {
+          UI.loading(false);
+          UI.toast("Erro ao calcular rota. Tente novamente.", "error");
+        });
+      },
+    };
+
+    const GeocodingController = {
+      timers: { origin: null, destination: null },
+      async search(query) {
+        const q = query.trim();
+        if (!q || q.length < 3) return [];
+        const url = new URL("https://nominatim.openstreetmap.org/search");
+        url.searchParams.set("q", q);
+        url.searchParams.set("format", "json");
+        url.searchParams.set("addressdetails", "1");
+        url.searchParams.set("limit", "5");
+        url.searchParams.set("countrycodes", "br");
+        const response = await fetch(url.toString(), { headers: { "Accept-Language": "pt-BR" } });
+        if (!response.ok) throw new Error("geocoding-failed");
+        return response.json();
+      },
+      bind(kind) {
+        const input = kind === "origin" ? UI.el.originInput : UI.el.destinationInput;
+        input.addEventListener("input", () => {
+          clearTimeout(this.timers[kind]);
+          const val = input.value;
+          if (!val || val.length < 3) {
+            UI.hideSuggestions(kind);
+            return;
+          }
+          this.timers[kind] = setTimeout(async () => {
+            try {
+              const list = await this.search(val);
+              UI.suggestions(kind, list);
+            } catch {
+              UI.toast("Falha ao buscar enderecos. Tente de novo.", "error");
+            }
+          }, 500);
+        });
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            RoutingController.calculate();
+          }
+        });
+      },
+      choose(btn) {
+        const kind = btn.dataset.kind;
+        const lat = Number(btn.dataset.lat);
+        const lng = Number(btn.dataset.lon);
+        const name = btn.dataset.name;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        if (kind === "origin") RoutingController.setOrigin(lat, lng, name);
+        if (kind === "destination") RoutingController.setDestination(lat, lng, name);
+        UI.hideSuggestions(kind);
+        MapController.fly(lat, lng, 15);
+      },
+    };
+
+    const Events = {
+      bind() {
+        UI.el.btnCalc.addEventListener("click", () => RoutingController.calculate());
+        UI.el.btnClear.addEventListener("click", () => {
+          RoutingController.clearRoute();
+          UI.toast("Mapa e rota limpos.");
+        });
+        UI.el.btnLoc.addEventListener("click", this.myLocation);
+        UI.el.btnCopy.addEventListener("click", this.copyLink);
+        UI.el.toggleSteps.addEventListener("click", () => UI.toggleSteps());
+
+        UI.el.originSuggestions.addEventListener("click", (e) => {
+          const btn = e.target.closest(".sg-item");
+          if (!btn) return;
+          GeocodingController.choose(btn);
+        });
+
+        UI.el.destinationSuggestions.addEventListener("click", (e) => {
+          const btn = e.target.closest(".sg-item");
+          if (!btn) return;
+          GeocodingController.choose(btn);
+        });
+
+        UI.el.transportGrid.addEventListener("click", (e) => {
+          const btn = e.target.closest(".mode");
+          if (!btn) return;
+          RoutingController.setMode(btn.dataset.mode);
+        });
+
+        UI.el.zoomIn.addEventListener("click", () => State.map.zoomIn());
+        UI.el.zoomOut.addEventListener("click", () => State.map.zoomOut());
+
+        document.addEventListener("click", (e) => {
+          if (!e.target.closest("#origin-suggestions") && e.target !== UI.el.originInput) UI.hideSuggestions("origin");
+          if (!e.target.closest("#destination-suggestions") && e.target !== UI.el.destinationInput) UI.hideSuggestions("destination");
+        });
+      },
+      myLocation() {
+        if (!navigator.geolocation) {
+          UI.toast("Geolocalizacao nao suportada neste navegador.", "error");
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            RoutingController.setOrigin(latitude, longitude, "Minha Localizacao");
+            MapController.fly(latitude, longitude, 15);
+            UI.toast("Origem definida com sua localizacao.");
+          },
+          () => UI.toast("Nao foi possivel obter sua localizacao.", "error"),
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+        );
+      },
+      async copyLink() {
+        if (!RoutingController.canRoute()) {
+          UI.toast("Calcule uma rota antes de copiar o link.", "error");
+          return;
+        }
+        RoutingController.updateHash();
+        const link = `${window.location.origin}${window.location.pathname}${window.location.hash}`;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(link);
+          } else {
+            const temp = document.createElement("textarea");
+            temp.value = link;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand("copy");
+            temp.remove();
+          }
+          UI.toast("Link da rota copiado.");
+        } catch {
+          UI.toast("Nao foi possivel copiar o link.", "error");
+        }
+      },
+    };
+    const Bootstrap = {
+      fromHash() {
+        const hash = window.location.hash.replace("#", "");
+        if (!hash) return false;
+        const parts = hash.split(",").map(Number);
+        if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return false;
+        const [lat1, lng1, lat2, lng2] = parts;
+        RoutingController.setOrigin(lat1, lng1, `Origem (${lat1.toFixed(4)}, ${lng1.toFixed(4)})`);
+        RoutingController.setDestination(lat2, lng2, `Destino (${lat2.toFixed(4)}, ${lng2.toFixed(4)})`);
+        State.map.fitBounds([[lat1, lng1], [lat2, lng2]], { padding: [35, 35] });
+        RoutingController.calculate();
+        return true;
+      },
+      fromStorage() {
+        try {
+          const raw = localStorage.getItem("interactive_route_last");
+          if (!raw) return false;
+          const saved = JSON.parse(raw);
+          if (!saved || !saved.origin || !saved.destination) return false;
+          if (saved.mode && TRANSPORT[saved.mode]) {
+            State.mode = saved.mode;
+            UI.setMode(saved.mode);
+          }
+          RoutingController.setOrigin(saved.origin.lat, saved.origin.lng, `Origem (${saved.origin.lat.toFixed(4)}, ${saved.origin.lng.toFixed(4)})`);
+          RoutingController.setDestination(saved.destination.lat, saved.destination.lng, `Destino (${saved.destination.lat.toFixed(4)}, ${saved.destination.lng.toFixed(4)})`);
+          State.map.fitBounds([[saved.origin.lat, saved.origin.lng], [saved.destination.lat, saved.destination.lng]], { padding: [35, 35] });
+          RoutingController.calculate();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      init() {
+        UI.init();
+        MapController.init();
+        GeocodingController.bind("origin");
+        GeocodingController.bind("destination");
+        Events.bind();
+        const hashLoaded = this.fromHash();
+        if (!hashLoaded) this.fromStorage();
+      },
+    };
+
+    Bootstrap.init();
+  </script>
+</body>
+</html>

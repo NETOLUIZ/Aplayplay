@@ -1,0 +1,29 @@
+﻿{
+  "name": "Aplayplay",
+  "short_name": "Aplayplay",
+  "description": "SaaS para operacao de motoristas, corridas e atendimento.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A1A3A",
+  "theme_color": "#0A1A3A",
+  "icons": [
+    {
+      "src": "/Aplayplay-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/Aplayplay-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/Aplayplay-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
