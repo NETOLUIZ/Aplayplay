@@ -4,6 +4,7 @@ import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet'
 import { useParams, useSearchParams } from 'react-router-dom'
 import {
   createRide,
+  getPublicDriverBySlug,
   isApiEnabled,
   listChatMessages,
   listRides,
@@ -636,12 +637,23 @@ function BookingRequestDemoPage() {
   const [trafficNotice, setTrafficNotice] = useState('')
   const allowPassengerSignup = Boolean(slug)
   const apiEnabled = isApiEnabled()
+  const fallbackDriverProfile = useMemo(
+    () => ({
+      fullName: searchParams.get('driver') || 'Motorista parceiro',
+      vehicleModel: searchParams.get('vehicle') || 'Veiculo nao informado',
+      vehiclePlate: searchParams.get('plate') || '---',
+      vehicleCategory: searchParams.get('category') || 'Motorista Parceiro',
+      city: searchParams.get('city') || 'Fortaleza, CE',
+    }),
+    [searchParams],
+  )
+  const [driverProfile, setDriverProfile] = useState(fallbackDriverProfile)
 
-  const driverName = searchParams.get('driver') || 'Carlos Silva'
-  const vehicle = searchParams.get('vehicle') || 'Toyota Corolla'
-  const plate = searchParams.get('plate') || 'ABC-1234'
-  const category = searchParams.get('category') || 'Motorista Parceiro'
-  const city = searchParams.get('city') || 'Fortaleza, CE'
+  const driverName = driverProfile.fullName || 'Motorista parceiro'
+  const vehicle = driverProfile.vehicleModel || 'Veiculo nao informado'
+  const plate = driverProfile.vehiclePlate || '---'
+  const category = driverProfile.vehicleCategory || 'Motorista Parceiro'
+  const city = driverProfile.city || 'Fortaleza, CE'
   const driverInitials = driverName
     .split(' ')
     .filter(Boolean)
@@ -698,6 +710,58 @@ function BookingRequestDemoPage() {
     [tariffs, tripDistanceKm, estimatedDurationMin],
   )
   const estimatedFareLabel = formatCurrencyBRL(estimatedFare)
+
+  useEffect(() => {
+    setDriverProfile(fallbackDriverProfile)
+  }, [fallbackDriverProfile])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDriverBySlug() {
+      if (!slug) return
+
+      if (apiEnabled) {
+        try {
+          const result = await getPublicDriverBySlug(slug)
+          const driver = result?.driver
+          if (!cancelled && driver) {
+            setDriverProfile((current) => ({
+              ...current,
+              fullName: String(driver.fullName || current.fullName || 'Motorista parceiro'),
+              vehicleModel: String(driver.vehicleModel || current.vehicleModel || 'Veiculo nao informado'),
+              vehiclePlate: String(driver.vehiclePlate || current.vehiclePlate || '---'),
+              vehicleCategory: String(driver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
+              city: String(driver.city || current.city || 'Fortaleza, CE'),
+            }))
+            return
+          }
+        } catch {
+          // fallback local quando API falha
+        }
+      }
+
+      const localDriver = readJson(DRIVER_ACCOUNT_KEY, null)
+      const localSlug = String(localDriver?.slug || '').trim().toLowerCase()
+      const targetSlug = String(slug || '').trim().toLowerCase()
+      if (!cancelled && localDriver && localSlug && localSlug === targetSlug) {
+        setDriverProfile((current) => ({
+          ...current,
+          fullName: String(localDriver.fullName || current.fullName || 'Motorista parceiro'),
+          vehicleModel: String(localDriver.vehicleModel || current.vehicleModel || 'Veiculo nao informado'),
+          vehiclePlate: String(localDriver.vehiclePlate || current.vehiclePlate || '---'),
+          vehicleCategory: String(localDriver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
+          city: String(localDriver.city || current.city || 'Fortaleza, CE'),
+        }))
+      }
+    }
+
+    void loadDriverBySlug()
+
+    return () => {
+      cancelled = true
+    }
+  }, [slug, apiEnabled])
 
   async function syncPassengerLocationAfterLogin() {
     setGeoFeedback('Obtendo sua localizacao...')
@@ -1709,7 +1773,7 @@ function BookingRequestDemoPage() {
                       />
                       <button type="button" aria-label="Limpar origem" onClick={() => setOrigin('')}>X</button>
                     </div>
-                    {isOriginFocused && origin.trim().length >= 3 && (
+                    {(origin.trim().length >= 3 && (isOriginFocused || loadingOriginSuggestions || originSuggestions.length > 0)) && (
                       <div className="booking-suggestions">
                         {loadingOriginSuggestions && <p className="booking-suggestions__empty">Buscando no Ceara...</p>}
                         {!loadingOriginSuggestions && originSuggestions.length === 0 && (
@@ -1761,7 +1825,7 @@ function BookingRequestDemoPage() {
                         autoComplete="off"
                       />
                     </div>
-                    {isDestinationFocused && destination.trim().length >= 3 && (
+                    {(destination.trim().length >= 3 && (isDestinationFocused || loadingDestinationSuggestions || destinationSuggestions.length > 0)) && (
                       <div className="booking-suggestions">
                         {loadingDestinationSuggestions && <p className="booking-suggestions__empty">Buscando no Ceara...</p>}
                         {!loadingDestinationSuggestions && destinationSuggestions.length === 0 && (

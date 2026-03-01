@@ -1949,6 +1949,10 @@
   position: relative;
 }
 
+.booking-field:focus-within {
+  z-index: 60;
+}
+
 .booking-suggestions {
   position: absolute;
   left: 0;
@@ -1959,9 +1963,11 @@
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 12px 24px rgba(2, 6, 23, 0.12);
-  max-height: 190px;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
   overflow: auto;
-  z-index: 35;
+  z-index: 1200;
 }
 
 .booking-suggestions__item {

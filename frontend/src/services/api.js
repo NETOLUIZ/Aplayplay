@@ -56,6 +56,11 @@ export async function loginDriver(payload) {
   })
 }
 
+export async function getPublicDriverBySlug(slug) {
+  const encoded = encodeURIComponent(String(slug || '').trim())
+  return request(`/api/drivers/${encoded}/public`, { method: 'GET' })
+}
+
 export async function signupPassenger(payload) {
   return request('/api/passengers/signup', {
     method: 'POST',

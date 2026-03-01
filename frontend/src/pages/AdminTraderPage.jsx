@@ -40,26 +40,6 @@ function formatCurrency(value) {
   })
 }
 
-function hashText(value) {
-  return String(value || '')
-    .split('')
-    .reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0)
-}
-
-function buildIndividualTariffs(driverName = '', category = '') {
-  const base = { perKm: 3.8, perMinute: 0.55, displacementFee: 5 }
-  const text = `${driverName}|${category}`.toLowerCase()
-  const seed = hashText(text)
-  const randomFactor = 0.92 + ((seed % 19) / 100)
-  const factor = /premium|executivo|luxo/.test(text) ? 1.22 * randomFactor : randomFactor
-
-  return {
-    perKm: formatBrazilianDecimal(base.perKm * factor),
-    perMinute: formatBrazilianDecimal(base.perMinute * factor),
-    displacementFee: formatBrazilianDecimal(base.displacementFee * (0.95 + ((seed % 11) / 100))),
-  }
-}
-
 function readJson(key, fallback) {
   try {
     const raw = localStorage.getItem(key)
@@ -152,18 +132,13 @@ function AdminTraderPage() {
   }, [passengers, search, passengerStatusFilter])
 
   const statsSummary = useMemo(() => {
-    const totalDrivers = Math.max(1, drivers.length)
-    const totalHours = totalDrivers * 128
-    const totalTrips = totalDrivers * 335
-    const totalGross = totalDrivers * 5200
-    const avgRating = 4.8
+    const totalHours = drivers.reduce((sum, driver) => sum + Number(driver?.onlineHours || 0), 0)
+    const totalTrips = drivers.reduce((sum, driver) => sum + Number(driver?.totalTrips || 0), 0)
+    const totalGross = drivers.reduce((sum, driver) => sum + Number(driver?.totalGross || 0), 0)
+    const ratings = drivers.map((driver) => Number(driver?.rating)).filter((value) => Number.isFinite(value) && value > 0)
+    const avgRating = ratings.length ? (ratings.reduce((sum, value) => sum + value, 0) / ratings.length) : 0
     return { totalHours, totalTrips, totalGross, avgRating }
   }, [drivers])
-
-  function getDriverRating(driver) {
-    const base = hashText(`${driver.fullName}${driver.vehiclePlate}`)
-    return (4.5 + (base % 5) * 0.1).toFixed(1)
-  }
 
   function handleTariffInputChange(field, value) {
     setAdminTariffs((current) => ({ ...current, [field]: value }))
@@ -255,13 +230,6 @@ function AdminTraderPage() {
     setAdminTariffs(normalized)
     await updateDriverById(driverId, { tariffs: normalized })
     setAdminTariffMessage('Tarifas padrao aplicadas para este motorista.')
-  }
-
-  async function generateIndividualTariffs(driver) {
-    const generated = buildIndividualTariffs(driver.fullName, driver.vehicleCategory)
-    setAdminTariffs(generated)
-    await updateDriverById(driver.id, { tariffs: generated })
-    setAdminTariffMessage('Tarifas individuais geradas e aplicadas para este motorista.')
   }
 
   async function cyclePassengerStatus(passenger) {
@@ -371,7 +339,7 @@ function AdminTraderPage() {
               )}
               {menu === 'passageiros' && <button type="button" className="btn btn--ghost" onClick={exportPassengersCsv}>Exportar CSV</button>}
               {menu === 'motoristas' && <button type="button" className="btn btn--primary" onClick={() => navigate('/cadastro/motorista')}>Novo Motorista</button>}
-              {menu === 'estatisticas' && <button type="button" className="btn btn--primary" onClick={() => setAdminNotice('Exportacao de estatisticas em PDF ativada no modo demo.')}>Exportar PDF</button>}
+              {menu === 'estatisticas' && <button type="button" className="btn btn--primary" onClick={() => setAdminNotice('Exportacao de PDF disponivel apos integrar dados reais.')}>Exportar PDF</button>}
               <button type="button" className="btn btn--ghost" onClick={() => { void handleAdminLogout() }}>Sair do Admin</button>
             </div>
           </header>
@@ -446,10 +414,10 @@ function AdminTraderPage() {
           {menu === 'estatisticas' && (
             <div className="space-y-8">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Tempo Online Total</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.totalHours}h</p></article>
-                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Lucro Total</p><p className="mt-1 text-2xl font-black text-slate-900">{formatCurrency(statsSummary.totalGross)}</p></article>
-                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Numero de Viagens</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.totalTrips}</p></article>
-                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Avaliacao Media</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.avgRating}/5</p></article>
+                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Tempo Online Total</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.totalHours > 0 ? `${statsSummary.totalHours}h` : '--'}</p></article>
+                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Lucro Total</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.totalGross > 0 ? formatCurrency(statsSummary.totalGross) : '--'}</p></article>
+                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Numero de Viagens</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.totalTrips > 0 ? statsSummary.totalTrips : '--'}</p></article>
+                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-medium text-slate-500">Avaliacao Media</p><p className="mt-1 text-2xl font-black text-slate-900">{statsSummary.avgRating > 0 ? `${statsSummary.avgRating.toFixed(1)}/5` : '--'}</p></article>
               </div>
             </div>
           )}
@@ -467,7 +435,7 @@ function AdminTraderPage() {
                     <div className="adminx__driver-photo">{driver.photoDataUrl ? <img src={driver.photoDataUrl} alt={driver.fullName} /> : (driver.fullName || '?').slice(0, 2).toUpperCase()}</div>
                     <div>
                       <h3>{driver.fullName || 'Motorista'}</h3>
-                      <p>{driver.email || 'sem e-mail'} - Nota {getDriverRating(driver)}</p>
+                      <p>{driver.email || 'sem e-mail'}</p>
                     </div>
                   </div>
                   <span className={`adminx__status${active ? ' is-active' : ' is-blocked'}`}>{active ? 'Ativo' : 'Desativado'}</span>
@@ -507,7 +475,6 @@ function AdminTraderPage() {
                     </label>
                   </div>
                   <div className="adminx__tariffs-actions">
-                    <button className="btn btn--ghost btn--block" type="button" onClick={() => { void generateIndividualTariffs(driver) }}>Gerar Tarifas Individuais</button>
                     <button className="btn btn--primary btn--block" type="button" onClick={() => { void applyAdminTariffs(driver.id) }}>Aplicar Tarifas</button>
                   </div>
                   {adminTariffMessage && <p className="adminx__hint">{adminTariffMessage}</p>}

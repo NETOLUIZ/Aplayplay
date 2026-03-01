@@ -5,7 +5,6 @@ import {
   dashboardMenu,
   initialDashboardStats,
   initialTariffs,
-  initialUpcomingRides,
 } from '../data/mockData'
 import { useDriverAccount } from '../context/DriverAccountContext'
 import {
@@ -184,15 +183,15 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
     )
   }
 
-  const driverName = driverAccount?.fullName || 'Joao Silva'
+  const driverName = driverAccount?.fullName || 'Motorista'
   const isTariffsEnabled = driverAccount?.tariffsEnabled !== false
-  const firstName = driverName.split(' ')[0] || 'Joao'
-  const driverCity = driverAccount?.city || 'Sao Paulo, SP'
+  const firstName = driverName.split(' ')[0] || 'Motorista'
+  const driverCity = driverAccount?.city || 'sua regiao'
   const driverDisplayCity = driverLiveCity || driverCity
   const greeting = getGreetingByHour()
   const driverInitials = getInitials(driverName)
   const driverPhoto = driverAccount?.photoDataUrl || ''
-  const driverSlug = slugify(driverName) || 'motorista'
+  const driverSlug = String(driverAccount?.slug || slugify(driverName) || 'motorista').trim()
   const publicBookingPath = `/solicitar/${driverSlug}`
   const publicBookingLink = `${window.location.origin}${publicBookingPath}`
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicBookingLink)}`
@@ -240,7 +239,7 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setRides(initialUpcomingRides)
+      setRides([])
       setLoading(false)
     }, 450)
 
@@ -384,22 +383,31 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
 
   const statCards = initialDashboardStats.map((card) => {
     if (card.key === 'earnings') {
-      const total = parsedSum > 0 ? parsedSum : 250
+      const total = parsedSum > 0 ? parsedSum : 0
       return {
         ...card,
         value: formatCurrency(total),
-        badge: acceptedCount > 0 ? `+${acceptedCount} aceitas` : card.badge,
-        hint: acceptedCount > 0 ? 'corridas confirmadas' : card.hint,
+        badge: acceptedCount > 0 ? `+${acceptedCount} aceitas` : '0',
+        hint: acceptedCount > 0 ? 'corridas confirmadas' : 'sem corridas finalizadas',
       }
     }
 
     if (card.key === 'rides') {
-      const ridesDone = 12 + acceptedCount
+      const ridesDone = acceptedCount
       return {
         ...card,
         value: String(ridesDone),
         badge: pendingCount > 0 ? `+${pendingCount}` : '0',
         hint: pendingCount > 0 ? 'aguardando resposta' : 'sem novas corridas',
+      }
+    }
+
+    if (card.key === 'rating') {
+      return {
+        ...card,
+        value: '--',
+        badge: 'Sem notas',
+        hint: 'aguardando avaliacoes',
       }
     }
 
@@ -864,14 +872,14 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
               {activeMenu === 'Ganhos' && (
                 <section className="driver-panel driver-panel--info">
                   <div className="driver-panel__head"><h5>Ganhos</h5></div>
-                  <div className="driver-panel__body-text">Os valores das corridas sao recalculados a partir das tarifas configuradas. Ajuste as tarifas e salve para atualizar as estimativas.</div>
+                  <div className="driver-panel__body-text">Sem dados de ganhos no momento. Os valores aparecerao quando houver corridas aceitas/finalizadas.</div>
                 </section>
               )}
 
               {showRatings && (
                 <section className="driver-panel driver-panel--info">
                   <div className="driver-panel__head"><h5>Avaliacoes</h5></div>
-                  <div className="driver-panel__body-text">Avaliacao media atual: <strong>4.95</strong>. Continue mantendo boa taxa de aceitacao e atendimento.</div>
+                  <div className="driver-panel__body-text">Avaliacao ainda indisponivel. As notas aparecem apos as primeiras corridas.</div>
                 </section>
               )}
 
