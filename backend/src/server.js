@@ -235,6 +235,12 @@ app.get('/api/drivers/:slug/public', (req, res) => {
       vehicleCategory: driver.vehicleCategory,
       city: driver.city,
       slug: driver.slug,
+      tariffsEnabled: driver.tariffsEnabled !== false,
+      tariffs: {
+        perKm: String(driver?.tariffs?.perKm || '3,80'),
+        perMinute: String(driver?.tariffs?.perMinute || '0,55'),
+        displacementFee: String(driver?.tariffs?.displacementFee || '5,00'),
+      },
     },
   })
 })

@@ -336,7 +336,18 @@ async function fetchOsrmRoutes(fromPoint, toPoint, allowAlternatives) {
   }
 }
 
-function readTariffsFromDriverAccount() {
+function readTariffsFromDriverProfile(driverProfile) {
+  if (driverProfile?.tariffsEnabled === false) {
+    return { perKm: 3.8, perMinute: 0.55, displacementFee: 5 }
+  }
+  if (driverProfile?.tariffs) {
+    return {
+      perKm: parseBrazilianCurrencyInput(driverProfile.tariffs?.perKm) || 3.8,
+      perMinute: parseBrazilianCurrencyInput(driverProfile.tariffs?.perMinute) || 0.55,
+      displacementFee: parseBrazilianCurrencyInput(driverProfile.tariffs?.displacementFee) || 5,
+    }
+  }
+
   try {
     const account = JSON.parse(localStorage.getItem(DRIVER_ACCOUNT_KEY) || 'null')
     if (account?.tariffsEnabled === false) {
@@ -644,6 +655,8 @@ function BookingRequestDemoPage() {
       vehiclePlate: searchParams.get('plate') || '---',
       vehicleCategory: searchParams.get('category') || 'Motorista Parceiro',
       city: searchParams.get('city') || 'Fortaleza, CE',
+      tariffsEnabled: true,
+      tariffs: null,
     }),
     [searchParams],
   )
@@ -662,7 +675,7 @@ function BookingRequestDemoPage() {
     .join('')
     .toUpperCase() || 'CS'
   const fallbackRoutePositions = [passengerPoint, driverPoint, destinationPoint]
-  const tariffs = useMemo(() => readTariffsFromDriverAccount(), [])
+  const tariffs = useMemo(() => readTariffsFromDriverProfile(driverProfile), [driverProfile])
   const routeCandidates = useMemo(
     () => tripRoutes.map((route, index) => {
       const traffic = buildRouteTraffic(route.points, route.distanceKm, route.baseDurationMin, trafficTick)
@@ -733,6 +746,8 @@ function BookingRequestDemoPage() {
               vehiclePlate: String(driver.vehiclePlate || current.vehiclePlate || '---'),
               vehicleCategory: String(driver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
               city: String(driver.city || current.city || 'Fortaleza, CE'),
+              tariffsEnabled: driver.tariffsEnabled !== false,
+              tariffs: driver.tariffs || current.tariffs || null,
             }))
             return
           }
@@ -749,10 +764,12 @@ function BookingRequestDemoPage() {
           ...current,
           fullName: String(localDriver.fullName || current.fullName || 'Motorista parceiro'),
           vehicleModel: String(localDriver.vehicleModel || current.vehicleModel || 'Veiculo nao informado'),
-          vehiclePlate: String(localDriver.vehiclePlate || current.vehiclePlate || '---'),
-          vehicleCategory: String(localDriver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
-          city: String(localDriver.city || current.city || 'Fortaleza, CE'),
-        }))
+            vehiclePlate: String(localDriver.vehiclePlate || current.vehiclePlate || '---'),
+            vehicleCategory: String(localDriver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
+            city: String(localDriver.city || current.city || 'Fortaleza, CE'),
+            tariffsEnabled: localDriver.tariffsEnabled !== false,
+            tariffs: localDriver.tariffs || current.tariffs || null,
+          }))
       }
     }
 
