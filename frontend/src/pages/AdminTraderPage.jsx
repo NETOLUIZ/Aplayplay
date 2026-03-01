@@ -12,6 +12,7 @@ import {
 } from '../services/api'
 
 const ADMIN_AUTH_KEY = 'Aplayplay_admin_auth'
+const DRIVER_LIST_KEY = 'Aplayplay_driver_accounts'
 
 function parseBrazilianCurrencyInput(value) {
   const normalized = String(value ?? '')
@@ -51,6 +52,26 @@ function readJson(key, fallback) {
 
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value))
+}
+
+function mergeDrivers(apiDrivers, localDrivers) {
+  const byKey = new Map()
+  const safeApi = Array.isArray(apiDrivers) ? apiDrivers : []
+  const safeLocal = Array.isArray(localDrivers) ? localDrivers : []
+
+  const put = (driver) => {
+    const id = String(driver?.id || '').trim()
+    const email = String(driver?.email || '').trim().toLowerCase()
+    const slug = String(driver?.slug || '').trim().toLowerCase()
+    const key = id || email || slug
+    if (!key) return
+    const previous = byKey.get(key) || {}
+    byKey.set(key, { ...previous, ...driver })
+  }
+
+  safeLocal.forEach(put)
+  safeApi.forEach(put)
+  return Array.from(byKey.values())
 }
 
 function AdminTraderPage() {
@@ -96,12 +117,16 @@ function AdminTraderPage() {
 
         const apiDrivers = Array.isArray(driversRes?.drivers) ? driversRes.drivers : []
         const apiPassengers = Array.isArray(passengersRes?.passengers) ? passengersRes.passengers : []
+        const localDrivers = readJson(DRIVER_LIST_KEY, [])
+        const mergedDrivers = mergeDrivers(apiDrivers, localDrivers)
 
-        setDrivers(apiDrivers)
+        setDrivers(mergedDrivers)
         setPassengers(apiPassengers)
       } catch (error) {
         if (!cancelled) {
           setAdminNotice(error.message || 'Nao foi possivel carregar dados do admin na API.')
+          const localDrivers = readJson(DRIVER_LIST_KEY, [])
+          setDrivers(Array.isArray(localDrivers) ? localDrivers : [])
         }
       }
     }
