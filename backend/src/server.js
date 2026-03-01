@@ -16,6 +16,7 @@ const allowedOrigins = String(process.env.CORS_ORIGIN || '')
 const sessions = new Map()
 const drivers = []
 const passengers = []
+const passengerDriverLinks = []
 const rides = []
 const chatsByRide = new Map()
 
@@ -70,6 +71,61 @@ function adminRequired(req, res, next) {
     return
   }
   next()
+}
+
+function passengerRequired(req, res, next) {
+  if (req.session?.role !== 'passenger') {
+    res.status(403).json({ error: 'Acesso restrito ao passageiro autenticado.' })
+    return
+  }
+  next()
+}
+
+function findPassengerBySession(session) {
+  const passengerId = String(session?.id || '')
+  if (passengerId) {
+    const byId = passengers.find((item) => String(item.id) === passengerId)
+    if (byId) return byId
+  }
+  const email = String(session?.email || '').trim().toLowerCase()
+  if (email) return passengers.find((item) => String(item.email || '').trim().toLowerCase() === email)
+  return null
+}
+
+function findDriverByIdentifier(identifier) {
+  const value = String(identifier || '').trim().toLowerCase()
+  if (!value) return null
+  return drivers.find((item) => (
+    String(item.id || '').trim().toLowerCase() === value
+    || String(item.slug || '').trim().toLowerCase() === value
+  )) || null
+}
+
+function linkPassengerToDriver(passengerId, driverId) {
+  const pid = String(passengerId || '').trim()
+  const did = String(driverId || '').trim()
+  if (!pid || !did) return null
+  const existing = passengerDriverLinks.find((link) => (
+    String(link.passengerId) === pid && String(link.driverId) === did
+  ))
+  if (existing) return existing
+  const created = {
+    id: `PM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    passengerId: pid,
+    driverId: did,
+    createdAt: new Date().toISOString(),
+  }
+  passengerDriverLinks.unshift(created)
+  return created
+}
+
+function listPassengerDrivers(passengerId) {
+  const pid = String(passengerId || '').trim()
+  if (!pid) return []
+  const linkedIds = passengerDriverLinks
+    .filter((link) => String(link.passengerId) === pid)
+    .map((link) => String(link.driverId))
+  return drivers.filter((driver) => linkedIds.includes(String(driver.id)))
 }
 
 app.get('/api/health', (_req, res) => {
@@ -265,6 +321,16 @@ app.post('/api/passengers/signup', (req, res) => {
     res.status(409).json({ error: 'Ja existe passageiro com esse e-mail.' })
     return
   }
+  if (phone && passengers.some((item) => item.phone === phone)) {
+    res.status(409).json({ error: 'Ja existe passageiro com esse telefone.' })
+    return
+  }
+
+  const driver = findDriverByIdentifier(driverSlug)
+  if (!driver) {
+    res.status(404).json({ error: 'Motorista do QR/link nao encontrado.' })
+    return
+  }
 
   const created = {
     id: `PS-${Date.now()}`,
@@ -275,17 +341,29 @@ app.post('/api/passengers/signup', (req, res) => {
     address,
     status: 'active',
     createdAt: new Date().toISOString(),
-    driverSlug,
+    driverSlug: driver.slug,
   }
 
   passengers.unshift(created)
-  res.status(201).json({ passenger: created })
+  linkPassengerToDriver(created.id, driver.id)
+
+  const token = createToken()
+  const session = { role: 'passenger', email: created.email, id: created.id }
+  sessions.set(token, session)
+  res.status(201).json({ token, passenger: created, linkedDriver: { id: driver.id, slug: driver.slug, fullName: driver.fullName } })
 })
 
 app.post('/api/passengers/login', (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
+  const phone = String(req.body?.phone || '').trim()
   const password = String(req.body?.password || '').trim()
-  const passenger = passengers.find((item) => item.email === email && item.password === password)
+  const passenger = passengers.find((item) => (
+    item.password === password
+    && (
+      (email && String(item.email || '').trim().toLowerCase() === email)
+      || (phone && String(item.phone || '').trim() === phone)
+    )
+  ))
   if (!passenger) {
     res.status(401).json({ error: 'Credenciais invalidas.' })
     return
@@ -293,14 +371,199 @@ app.post('/api/passengers/login', (req, res) => {
   const token = createToken()
   const session = { role: 'passenger', email: passenger.email, id: passenger.id }
   sessions.set(token, session)
-  res.json({ token, passenger })
+  const linkedDrivers = listPassengerDrivers(passenger.id).map((driver) => ({
+    id: driver.id,
+    slug: driver.slug,
+    fullName: driver.fullName,
+    whatsapp: driver.phone,
+    city: driver.city,
+    vehicleModel: driver.vehicleModel,
+  }))
+  res.json({ token, passenger, linkedDrivers })
+})
+
+app.post('/api/auth/register', (req, res) => {
+  const fullName = String(req.body?.nome || req.body?.fullName || '').trim()
+  const phone = String(req.body?.telefone || req.body?.phone || '').trim()
+  const password = String(req.body?.senha || req.body?.password || '').trim()
+  const address = String(req.body?.address || '').trim()
+  const driverIdentifier = String(
+    req.body?.motoristaId
+    || req.body?.driverId
+    || req.body?.driverSlug
+    || '',
+  ).trim().toLowerCase()
+  const email = String(req.body?.email || `${String(phone).replace(/\D/g, '')}@passageiro.local`).trim().toLowerCase()
+
+  if (!driverIdentifier) {
+    res.status(400).json({ error: 'Primeiro cadastro do passageiro deve ser pelo QR/link do motorista.' })
+    return
+  }
+  if (!fullName || !phone || !password) {
+    res.status(400).json({ error: 'Informe nome, telefone e senha para cadastrar.' })
+    return
+  }
+
+  let passenger = passengers.find((item) => String(item.phone || '').trim() === phone)
+  if (!passenger) {
+    passenger = {
+      id: `PS-${Date.now()}`,
+      fullName,
+      email,
+      password,
+      phone,
+      address,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      driverSlug: '',
+    }
+    passengers.unshift(passenger)
+  }
+
+  const driver = findDriverByIdentifier(driverIdentifier)
+  if (!driver) {
+    res.status(404).json({ error: 'Motorista do link nao encontrado.' })
+    return
+  }
+  linkPassengerToDriver(passenger.id, driver.id)
+  passenger.driverSlug = passenger.driverSlug || driver.slug
+
+  const token = createToken()
+  const session = { role: 'passenger', email: passenger.email, id: passenger.id }
+  sessions.set(token, session)
+
+  res.status(201).json({
+    token,
+    passenger,
+    linkedDriver: { id: driver.id, slug: driver.slug, fullName: driver.fullName },
+  })
+})
+
+app.post('/api/auth/login', (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  const phone = String(req.body?.telefone || req.body?.phone || '').trim()
+  const password = String(req.body?.senha || req.body?.password || '').trim()
+
+  if (!password || (!email && !phone)) {
+    res.status(400).json({ error: 'Informe telefone (ou e-mail) e senha.' })
+    return
+  }
+
+  const passenger = passengers.find((item) => (
+    item.password === password
+    && (
+      (email && String(item.email || '').trim().toLowerCase() === email)
+      || (phone && String(item.phone || '').trim() === phone)
+    )
+  ))
+  if (!passenger) {
+    res.status(401).json({ error: 'Credenciais invalidas.' })
+    return
+  }
+
+  const token = createToken()
+  const session = { role: 'passenger', email: passenger.email, id: passenger.id }
+  sessions.set(token, session)
+
+  const linkedDrivers = listPassengerDrivers(passenger.id).map((driver) => ({
+    id: driver.id,
+    slug: driver.slug,
+    fullName: driver.fullName,
+    whatsapp: driver.phone,
+    city: driver.city,
+    vehicleModel: driver.vehicleModel,
+    vehiclePlate: driver.vehiclePlate,
+  }))
+  res.json({ token, passenger, linkedDrivers })
+})
+
+app.get('/api/passengers/me/drivers', authRequired, passengerRequired, (req, res) => {
+  const passenger = findPassengerBySession(req.session)
+  if (!passenger) {
+    res.status(404).json({ error: 'Passageiro nao encontrado na sessao.' })
+    return
+  }
+  const linkedDrivers = listPassengerDrivers(passenger.id).map((driver) => ({
+    id: driver.id,
+    slug: driver.slug,
+    fullName: driver.fullName,
+    whatsapp: driver.phone,
+    city: driver.city,
+    vehicleModel: driver.vehicleModel,
+    vehiclePlate: driver.vehiclePlate,
+    tariffsEnabled: driver.tariffsEnabled !== false,
+    tariffs: {
+      perKm: String(driver?.tariffs?.perKm || '3,80'),
+      perMinute: String(driver?.tariffs?.perMinute || '0,55'),
+      displacementFee: String(driver?.tariffs?.displacementFee || '5,00'),
+    },
+  }))
+  res.json({ drivers: linkedDrivers })
+})
+
+app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, res) => {
+  const passenger = findPassengerBySession(req.session)
+  if (!passenger) {
+    res.status(404).json({ error: 'Passageiro nao encontrado na sessao.' })
+    return
+  }
+  const identifier = String(req.body?.motoristaId || req.body?.driverId || req.body?.driverSlug || '').trim()
+  if (!identifier) {
+    res.status(400).json({ error: 'Informe o identificador do motorista para vincular.' })
+    return
+  }
+  const driver = findDriverByIdentifier(identifier)
+  if (!driver) {
+    res.status(404).json({ error: 'Motorista nao encontrado.' })
+    return
+  }
+  const link = linkPassengerToDriver(passenger.id, driver.id)
+  passenger.driverSlug = passenger.driverSlug || driver.slug
+  res.status(201).json({
+    link,
+    driver: {
+      id: driver.id,
+      slug: driver.slug,
+      fullName: driver.fullName,
+      whatsapp: driver.phone,
+      city: driver.city,
+    },
+  })
 })
 
 app.post('/api/rides', (req, res) => {
+  const passengerTokenRaw = String(req.headers.authorization || '')
+  const passengerToken = passengerTokenRaw.startsWith('Bearer ') ? passengerTokenRaw.slice(7) : ''
+  const passengerSession = passengerToken ? sessions.get(passengerToken) : null
+  const requestedDriverSlug = String(req.body?.driverSlug || '').trim().toLowerCase()
+
+  if (requestedDriverSlug && passengerSession?.role !== 'passenger') {
+    res.status(401).json({ error: 'Login de passageiro obrigatorio para solicitar corrida.' })
+    return
+  }
+
+  if (passengerSession?.role === 'passenger') {
+    const passenger = findPassengerBySession(passengerSession)
+    if (!passenger) {
+      res.status(401).json({ error: 'Passageiro da sessao nao encontrado.' })
+      return
+    }
+    const linkedDrivers = listPassengerDrivers(passenger.id)
+    const hasAccess = linkedDrivers.some((driver) => (
+      String(driver.slug || '').trim().toLowerCase() === requestedDriverSlug
+      || String(driver.id || '').trim().toLowerCase() === requestedDriverSlug
+    ))
+    if (!hasAccess) {
+      res.status(403).json({ error: 'Passageiro sem vinculo com este motorista.' })
+      return
+    }
+  }
+
   const ride = {
     id: Date.now(),
     passengerName: String(req.body?.passengerName || 'Passageiro'),
     passengerEmail: String(req.body?.passengerEmail || ''),
+    driverSlug: requestedDriverSlug || '',
     driverName: String(req.body?.driverName || 'Motorista'),
     origin: String(req.body?.origin || ''),
     destination: String(req.body?.destination || ''),

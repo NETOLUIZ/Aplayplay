@@ -1,5 +1,6 @@
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
 const ADMIN_AUTH_STORAGE_KEY = 'Aplayplay_admin_auth'
+const PASSENGER_TOKEN_STORAGE_KEY = 'Aplayplay_passenger_token'
 
 function getAdminToken() {
   try {
@@ -12,12 +13,22 @@ function getAdminToken() {
   }
 }
 
+function getPassengerToken() {
+  try {
+    return String(localStorage.getItem(PASSENGER_TOKEN_STORAGE_KEY) || '')
+  } catch {
+    return ''
+  }
+}
+
 async function request(path, options = {}) {
   if (!API_BASE_URL) {
     throw new Error('API base URL nao configurada.')
   }
   const authHeaders = options.auth
-    ? { Authorization: `Bearer ${getAdminToken()}` }
+    ? {
+      Authorization: `Bearer ${options.auth === 'passenger' ? getPassengerToken() : getAdminToken()}`,
+    }
     : {}
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -75,10 +86,40 @@ export async function loginPassenger(payload) {
   })
 }
 
+export async function registerPassenger(payload) {
+  return request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function authLoginPassenger(payload) {
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getPassengerDrivers() {
+  return request('/api/passengers/me/drivers', {
+    method: 'GET',
+    auth: 'passenger',
+  })
+}
+
+export async function addPassengerDriver(payload) {
+  return request('/api/passengers/me/drivers', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: 'passenger',
+  })
+}
+
 export async function createRide(payload) {
   return request('/api/rides', {
     method: 'POST',
     body: JSON.stringify(payload),
+    auth: 'passenger',
   })
 }
 

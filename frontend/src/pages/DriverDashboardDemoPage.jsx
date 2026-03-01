@@ -192,7 +192,8 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
   const driverInitials = getInitials(driverName)
   const driverPhoto = driverAccount?.photoDataUrl || ''
   const driverSlug = String(driverAccount?.slug || slugify(driverName) || 'motorista').trim()
-  const publicBookingPath = `/solicitar/${driverSlug}`
+  const driverPublicId = String(driverAccount?.id || driverSlug).trim()
+  const publicBookingPath = `/m/${encodeURIComponent(driverPublicId)}`
   const publicBookingLink = `${window.location.origin}${publicBookingPath}`
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicBookingLink)}`
 

@@ -593,7 +593,8 @@ function formatShortFortalezaAddress(item) {
 }
 
 function BookingRequestDemoPage() {
-  const { slug } = useParams()
+  const routeParams = useParams()
+  const slug = String(routeParams.slug || routeParams.motoristaId || '').trim()
   const [searchParams] = useSearchParams()
   const mapRef = useRef(null)
   const originDebounceRef = useRef(null)
@@ -816,6 +817,11 @@ function BookingRequestDemoPage() {
     const parsed = readJson(PASSENGER_STORAGE_KEY, null)
     if (parsed?.email) {
       setPassengerAccount(parsed)
+    }
+    const token = String(localStorage.getItem(PASSENGER_TOKEN_KEY) || '')
+    if (token && parsed?.email) {
+      setIsPassengerLoggedIn(true)
+      setShowClientLogin(false)
     }
   }, [])
 
