@@ -93,7 +93,7 @@ function AdminTraderPage() {
   const [passengers, setPassengers] = useState([])
   const [adminNotice, setAdminNotice] = useState('')
   const [adminTariffMessage, setAdminTariffMessage] = useState('')
-  const [adminTariffs, setAdminTariffs] = useState({ perKm: '3,80', perMinute: '0,55', displacementFee: '5,00' })
+  const [adminTariffs, setAdminTariffs] = useState({ perKm: '', perMinute: '', displacementFee: '' })
 
   useEffect(() => {
     const auth = readJson(ADMIN_AUTH_KEY, null)
@@ -177,11 +177,15 @@ function AdminTraderPage() {
     setAdminTariffs((current) => ({ ...current, [field]: value }))
   }
 
-  function normalizeAdminTariffs() {
+  function normalizeAdminTariffs(baseTariffs = {}) {
+    const basePerKm = parseBrazilianCurrencyInput(baseTariffs?.perKm) || 3.8
+    const basePerMinute = parseBrazilianCurrencyInput(baseTariffs?.perMinute) || 0.55
+    const baseDisplacementFee = parseBrazilianCurrencyInput(baseTariffs?.displacementFee) || 5
+
     return {
-      perKm: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.perKm) || 3.8),
-      perMinute: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.perMinute) || 0.55),
-      displacementFee: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.displacementFee) || 5),
+      perKm: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.perKm) || basePerKm),
+      perMinute: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.perMinute) || basePerMinute),
+      displacementFee: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.displacementFee) || baseDisplacementFee),
     }
   }
 
@@ -266,7 +270,8 @@ function AdminTraderPage() {
   }
 
   async function applyAdminTariffs(driverId) {
-    const normalized = normalizeAdminTariffs()
+    const targetDriver = drivers.find((driver) => String(driver.id) === String(driverId))
+    const normalized = normalizeAdminTariffs(targetDriver?.tariffs || {})
     setAdminTariffs(normalized)
     await updateDriverById(driverId, { tariffs: normalized })
     setAdminTariffMessage('Tarifas padrao aplicadas para este motorista.')
@@ -533,7 +538,7 @@ function AdminTraderPage() {
           {menu === 'motoristas' && filteredDrivers.length > 0 && filteredDrivers.map((driver) => {
             const active = driver.isActive !== false
             const tariffsOn = driver.tariffsEnabled !== false
-            const currentTariffs = driver.tariffs || adminTariffs
+            const currentTariffs = driver.tariffs || { perKm: '3,80', perMinute: '0,55', displacementFee: '5,00' }
             return (
               <article key={driver.id || driver.email || driver.fullName} className="adminx__driver-card">
                 <div className="adminx__driver-top">
@@ -569,15 +574,15 @@ function AdminTraderPage() {
                   <div className="adminx__tariffs-grid">
                     <label>
                       <span>Valor por KM (R$)</span>
-                      <input type="text" value={adminTariffs.perKm || currentTariffs.perKm} onChange={(e) => handleTariffInputChange('perKm', e.target.value)} />
+                      <input type="text" value={adminTariffs.perKm !== '' ? adminTariffs.perKm : (currentTariffs.perKm || '')} onChange={(e) => handleTariffInputChange('perKm', e.target.value)} />
                     </label>
                     <label>
                       <span>Valor por Minuto (R$)</span>
-                      <input type="text" value={adminTariffs.perMinute || currentTariffs.perMinute} onChange={(e) => handleTariffInputChange('perMinute', e.target.value)} />
+                      <input type="text" value={adminTariffs.perMinute !== '' ? adminTariffs.perMinute : (currentTariffs.perMinute || '')} onChange={(e) => handleTariffInputChange('perMinute', e.target.value)} />
                     </label>
                     <label>
                       <span>Taxa de Deslocamento (R$)</span>
-                      <input type="text" value={adminTariffs.displacementFee || currentTariffs.displacementFee} onChange={(e) => handleTariffInputChange('displacementFee', e.target.value)} />
+                      <input type="text" value={adminTariffs.displacementFee !== '' ? adminTariffs.displacementFee : (currentTariffs.displacementFee || '')} onChange={(e) => handleTariffInputChange('displacementFee', e.target.value)} />
                     </label>
                   </div>
                   <div className="adminx__tariffs-actions">
