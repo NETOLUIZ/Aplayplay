@@ -272,6 +272,53 @@ function AdminTraderPage() {
     setAdminTariffMessage('Tarifas padrao aplicadas para este motorista.')
   }
 
+  async function applyAdminTariffsToAllDrivers() {
+    if (!drivers.length) {
+      setAdminNotice('Nenhum motorista encontrado para aplicar tarifas.')
+      return
+    }
+
+    const normalized = normalizeAdminTariffs()
+    setAdminTariffs(normalized)
+
+    try {
+      const results = await Promise.allSettled(
+        drivers.map((driver) => patchAdminDriver(driver.id, { tariffs: normalized })),
+      )
+
+      const updatedDrivers = []
+      let updatedCount = 0
+
+      results.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value?.driver) {
+          updatedDrivers.push(result.value.driver)
+          updatedCount += 1
+        }
+      })
+
+      if (updatedDrivers.length > 0) {
+        const byId = new Map(updatedDrivers.map((driver) => [String(driver.id), driver]))
+        setDrivers((current) => current.map((driver) => byId.get(String(driver.id)) || driver))
+      }
+
+      const failedCount = drivers.length - updatedCount
+      setAdminTariffMessage(
+        failedCount > 0
+          ? `Tarifas aplicadas em ${updatedCount} motorista(s). ${failedCount} falharam.`
+          : `Tarifas aplicadas para todos os ${updatedCount} motorista(s).`,
+      )
+    } catch (error) {
+      const message = String(error?.message || 'Nao foi possivel aplicar tarifas para todos.')
+      if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
+        localStorage.removeItem(ADMIN_AUTH_KEY)
+        setIsAdminAuthenticated(false)
+        setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+        return
+      }
+      setAdminNotice(message)
+    }
+  }
+
   async function cyclePassengerStatus(passenger) {
     const order = ['active', 'pending', 'inactive']
     const currentIdx = order.indexOf(passenger.status || 'active')
@@ -393,6 +440,11 @@ function AdminTraderPage() {
               )}
               {menu === 'passageiros' && <button type="button" className="btn btn--ghost" onClick={exportPassengersCsv}>Exportar CSV</button>}
               {menu === 'motoristas' && <button type="button" className="btn btn--primary" onClick={() => navigate('/cadastro/motorista')}>Novo Motorista</button>}
+              {menu === 'motoristas' && (
+                <button type="button" className="btn btn--ghost" onClick={() => { void applyAdminTariffsToAllDrivers() }}>
+                  Aplicar tarifas para todos
+                </button>
+              )}
               {menu === 'estatisticas' && <button type="button" className="btn btn--primary" onClick={() => setAdminNotice('Exportacao de PDF disponivel apos integrar dados reais.')}>Exportar PDF</button>}
               <button type="button" className="btn btn--ghost" onClick={() => { void handleAdminLogout() }}>Sair do Admin</button>
             </div>
