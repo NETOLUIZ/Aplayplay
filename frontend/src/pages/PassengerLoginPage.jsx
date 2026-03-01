@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { addPassengerDriver, authLoginPassenger } from '../services/api'
 
 const PASSENGER_STORAGE_KEY = 'Aplayplay_passenger_account'
@@ -73,6 +73,16 @@ function PassengerLoginPage() {
             <button className="btn btn--primary btn--block" type="submit" disabled={loading}>
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
+
+            {motoristaId ? (
+              <Link className="btn btn--ghost btn--block" to={`/register?motoristaId=${encodeURIComponent(motoristaId)}`}>
+                Primeiro acesso? Cadastrar passageiro
+              </Link>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Primeiro acesso deve ser pelo QR/link do motorista.
+              </p>
+            )}
           </form>
         </div>
       </div>
