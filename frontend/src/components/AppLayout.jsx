@@ -1,7 +1,9 @@
-﻿import { NavLink, Outlet, useLocation } from 'react-router-dom'
+﻿import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 function AppLayout() {
   const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
   const params = new URLSearchParams(location.search)
   const isQrPassengerFlow = location.pathname.startsWith('/m/') || params.has('motoristaId')
   const hideHeader = location.pathname === '/demo/cliente-solicitar' || location.pathname.startsWith('/solicitar/')
@@ -12,6 +14,16 @@ function AppLayout() {
     || location.pathname.startsWith('/app/motorista/')
   )
 
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname, location.search])
+
+  function handleNavClick(event) {
+    if (event.target instanceof Element && event.target.closest('a')) {
+      setMenuOpen(false)
+    }
+  }
+
   return (
     <div className="aplayplay-app">
       {!hideHeader && (
@@ -21,7 +33,23 @@ function AppLayout() {
               <span className="brand__name">Aplayplay</span>
             </div>
 
-            <nav className="site-nav site-nav--main" aria-label="Modulos do sistema">
+            <button
+              type="button"
+              className={`site-header__menu-btn${menuOpen ? ' is-open' : ''}`}
+              aria-label="Abrir menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((current) => !current)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+
+            <nav
+              className={`site-nav site-nav--main${menuOpen ? ' is-open' : ''}`}
+              aria-label="Modulos do sistema"
+              onClick={handleNavClick}
+            >
               <NavLink to="/home">Home</NavLink>
               {!isQrPassengerFlow && (
                 <>
@@ -86,4 +114,3 @@ function AppLayout() {
 }
 
 export default AppLayout
-

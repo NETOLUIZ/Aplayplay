@@ -44,6 +44,8 @@ const AUTOCOMPLETE_WARM_QUERIES = [
   'aldeota',
   'meireles',
   'centro fortaleza',
+  'clinicas',
+  'academias',
 ]
 const SMART_RANKING_WEIGHTS = {
   proximity: 4.8,
