@@ -2525,6 +2525,12 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow-x: hidden;
+}
+
+.adminx__main > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .adminx__header {
@@ -2551,7 +2557,10 @@ body {
 .adminx__header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.55rem;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .adminx__header-actions input {
@@ -2761,11 +2770,15 @@ body {
   border: 1px solid rgba(38, 55, 84, 0.12);
   overflow: hidden;
   background: #fff;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .adminx__table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 760px;
 }
 
 .adminx__table thead tr {
@@ -2794,10 +2807,12 @@ body {
 
 .adminx__table td p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .adminx__table td small {
   color: #94a3b8;
+  overflow-wrap: anywhere;
 }
 
 .adminx__table .is-right {

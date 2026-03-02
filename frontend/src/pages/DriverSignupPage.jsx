@@ -6,7 +6,7 @@ const initialForm = {
   fullName: '',
   email: '',
   phone: '',
-  city: 'Sao Paulo, SP',
+  city: 'Fortaleza, CE',
   photoDataUrl: '',
   vehicleModel: '',
   vehicleYear: '',
@@ -84,7 +84,7 @@ function DriverSignupPage() {
     <section className="driver-signup py-10 md:py-14">
       <div className="container">
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <aside className="rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm md:p-8">
+          <aside className="min-w-0 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm md:p-8">
             <p className="inline-flex items-center gap-2 rounded-full border border-yellow-300/50 bg-yellow-100/60 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-700">
               <span className="h-2 w-2 rounded-full bg-yellow-500" />
               Cadastro do Motorista
@@ -117,7 +117,7 @@ function DriverSignupPage() {
             </div>
           </aside>
 
-          <form className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-8" onSubmit={handleSubmit}>
+          <form className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-8" onSubmit={handleSubmit}>
             <div className="space-y-8">
               <section>
                 <div className="mb-4 flex items-center justify-between">

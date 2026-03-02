@@ -28,14 +28,6 @@ function LandingPage() {
               <span>✓ Teste gratis de 14 dias</span>
               <span>✓ Sem necessidade de cartao</span>
             </div>
-            <div className="hero__entry-actions">
-              <Link className="btn btn--primary" to="/demo/cliente-solicitar?flow=login">
-                Login Cliente
-              </Link>
-              <Link className="btn btn--ghost" to="/login">
-                Login Motorista
-              </Link>
-            </div>
           </div>
 
           <div className="signup-card" aria-label="Formulario de cadastro">
@@ -209,3 +201,7 @@ function LandingPage() {
 }
 
 export default LandingPage
+
+
+
+

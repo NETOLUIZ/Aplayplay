@@ -605,7 +605,7 @@ function BookingRequestDemoPage() {
   const warmCacheRef = useRef(false)
 
   const [origin, setOrigin] = useState('Beira Mar, Fortaleza')
-  const [destination, setDestination] = useState('Centro de Fortaleza')
+  const [destination, setDestination] = useState('')
   const [originSuggestions, setOriginSuggestions] = useState([])
   const [destinationSuggestions, setDestinationSuggestions] = useState([])
   const [loadingOriginSuggestions, setLoadingOriginSuggestions] = useState(false)
@@ -1861,7 +1861,7 @@ function BookingRequestDemoPage() {
                       <input
                         ref={destinationInputRef}
                         type="text"
-                        placeholder="Para onde voce quer ir?"
+                        placeholder="Digite o destino da viagem"
                         value={destination}
                         onChange={(e) => handleDestinationChange(e.target.value)}
                         onKeyDown={(e) => {
