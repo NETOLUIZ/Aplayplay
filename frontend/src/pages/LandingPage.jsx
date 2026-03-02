@@ -37,26 +37,9 @@ function LandingPage() {
             </div>
 
             <form className="signup-form">
-              <label>
-                <span>Nome Completo</span>
-                <input type="text" placeholder="Seu nome" />
-              </label>
-              <label>
-                <span>E-mail Profissional</span>
-                <input type="email" placeholder="voce@exemplo.com" />
-              </label>
-              <label>
-                <span>Senha</span>
-                <input type="password" placeholder="Minimo 8 caracteres" />
-              </label>
-
               <Link className="btn btn--primary btn--block" to="/cadastro/motorista">
                 Criar Conta
               </Link>
-
-              <p className="signup-form__terms">
-                Ao se cadastrar, voce concorda com nossos <a href="#">Termos</a> e <a href="#">Privacidade</a>.
-              </p>
             </form>
           </div>
         </div>

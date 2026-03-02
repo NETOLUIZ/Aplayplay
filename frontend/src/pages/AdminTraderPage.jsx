@@ -419,8 +419,7 @@ function AdminTraderPage() {
       <div className="adminx__shell">
         <aside className="adminx__sidebar">
           <div className="adminx__brand">
-            <div className="adminx__brand-icon">iD</div>
-            <strong>AdminPanel</strong>
+            <strong>Aplayplay Admin</strong>
           </div>
 
           <p className="adminx__section-label">Main Menu</p>
@@ -600,3 +599,4 @@ function AdminTraderPage() {
 }
 
 export default AdminTraderPage
+

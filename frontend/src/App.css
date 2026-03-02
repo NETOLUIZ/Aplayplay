@@ -1764,6 +1764,90 @@ body {
   gap: 0.55rem;
 }
 
+.booking-card__schedule-trigger {
+  padding: 0 1.15rem 0.8rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.booking-card__schedule-trigger > button {
+  border: 1px solid rgba(255, 212, 0, 0.28);
+  background: #f8fbff;
+  color: var(--primary);
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+}
+
+.booking-card__schedule-trigger small {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.booking-card__schedule-clear {
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  background: #fff1f2 !important;
+  color: #9f1239 !important;
+}
+
+.booking-schedule-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(2, 6, 23, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.booking-schedule-modal__content {
+  width: min(520px, 100%);
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.28);
+  padding: 1rem;
+}
+
+.booking-schedule-modal__content h4 {
+  margin: 0;
+  color: #0f172a;
+  font: 800 1.15rem/1.2 'Sora', sans-serif;
+}
+
+.booking-schedule-modal__content p {
+  margin: 0.35rem 0 0.8rem;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.booking-schedule-modal__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  padding: 0 1.15rem 0.3rem;
+}
+
+.booking-schedule-modal__ghost,
+.booking-schedule-modal__save {
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-weight: 700;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.booking-schedule-modal__ghost {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.booking-schedule-modal__save {
+  background: #FFD400;
+  color: #0A1A3A;
+  border-color: rgba(255, 212, 0, 0.58);
+}
+
 .booking-card__fare-preview {
   margin: 0 1.15rem 0.8rem;
   border: 1px solid rgba(255, 212, 0, 0.26);
@@ -4218,7 +4302,14 @@ body {
 .site-footer__top {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 1.5rem;
+}
+
+.site-footer__top > div {
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .site-footer__about {
@@ -4230,8 +4321,9 @@ body {
 
 .site-footer__links {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 1rem 1.5rem;
+  width: min(100%, 560px);
 }
 
 .site-footer__links h4 {
@@ -4258,6 +4350,7 @@ body {
   border-top: 1px solid rgba(38, 55, 84, 0.08);
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.75rem;
   color: #7a8aa6;
   font-size: 0.88rem;
@@ -4568,7 +4661,7 @@ body {
 
   .brand {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .site-nav--main {
@@ -4600,6 +4693,31 @@ body {
   .stats__grid,
   .site-footer__links {
     grid-template-columns: 1fr;
+  }
+
+  .site-footer {
+    padding: 1.2rem 0 1rem;
+  }
+
+  .site-footer__top {
+    gap: 1rem;
+  }
+
+  .site-footer__about {
+    max-width: 100%;
+  }
+
+  .site-footer__bottom {
+    gap: 0.4rem;
+  }
+
+  .site-footer__bottom p,
+  .site-footer__status {
+    width: 100%;
+  }
+
+  .site-footer__status {
+    justify-content: flex-start;
   }
 
   .cta-card__actions {
@@ -4831,6 +4949,11 @@ body {
 
   .booking-card__schedule {
     grid-template-columns: 1fr;
+  }
+
+  .booking-schedule-modal__actions {
+    grid-template-columns: 1fr;
+    padding-inline: 0;
   }
 
   .booking-auth-switch {

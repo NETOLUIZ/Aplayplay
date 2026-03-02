@@ -614,6 +614,7 @@ function BookingRequestDemoPage() {
   const [isDestinationFocused, setIsDestinationFocused] = useState(false)
   const [tripDate, setTripDate] = useState('')
   const [tripTime, setTripTime] = useState('')
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [showClientLogin, setShowClientLogin] = useState(true)
   const [authMode, setAuthMode] = useState('login')
   const [authError, setAuthError] = useState('')
@@ -1480,6 +1481,10 @@ function BookingRequestDemoPage() {
   }
 
   const isRideLayout = isPassengerLoggedIn && !showClientLogin
+  const hasSchedule = Boolean(tripDate || tripTime)
+  const scheduleSummary = hasSchedule
+    ? `${tripDate || '--/--/----'} ${tripTime || '--:--'}`
+    : 'Partida imediata'
 
   return (
     <section className={`booking-request-demo${showClientLogin ? ' booking-request-demo--auth' : ''}${isRideLayout ? ' booking-request-demo--ride' : ''}`} aria-labelledby="booking-demo">
@@ -1908,19 +1913,23 @@ function BookingRequestDemoPage() {
                   </label>
                 </div>
 
-                <div className="booking-card__schedule">
-                  <label className="booking-field">
-                    <span>Data da viagem</span>
-                    <div>
-                      <input type="date" value={tripDate} onChange={(e) => setTripDate(e.target.value)} />
-                    </div>
-                  </label>
-                  <label className="booking-field">
-                    <span>Horario da viagem</span>
-                    <div>
-                      <input type="time" value={tripTime} onChange={(e) => setTripTime(e.target.value)} />
-                    </div>
-                  </label>
+                <div className="booking-card__schedule-trigger">
+                  <button type="button" onClick={() => setShowScheduleModal(true)}>
+                    Agendar viagem
+                  </button>
+                  <small>{scheduleSummary}</small>
+                  {hasSchedule && (
+                    <button
+                      type="button"
+                      className="booking-card__schedule-clear"
+                      onClick={() => {
+                        setTripDate('')
+                        setTripTime('')
+                      }}
+                    >
+                      Limpar agendamento
+                    </button>
+                  )}
                 </div>
 
                 <div className="booking-card__fare-preview">
@@ -2036,6 +2045,35 @@ function BookingRequestDemoPage() {
                 Cancelar solicitacao
               </button>
             </aside>
+          )}
+
+          {showScheduleModal && (
+            <div className="booking-schedule-modal" role="dialog" aria-modal="true" aria-label="Agendar viagem" onClick={() => setShowScheduleModal(false)}>
+              <div className="booking-schedule-modal__content" onClick={(event) => event.stopPropagation()}>
+                <h4>Agendar viagem</h4>
+                <p>Escolha data e hora. Se nao preencher, a corrida sai agora.</p>
+
+                <div className="booking-card__schedule">
+                  <label className="booking-field">
+                    <span>Data da viagem</span>
+                    <div>
+                      <input type="date" value={tripDate} onChange={(e) => setTripDate(e.target.value)} />
+                    </div>
+                  </label>
+                  <label className="booking-field">
+                    <span>Horario da viagem</span>
+                    <div>
+                      <input type="time" value={tripTime} onChange={(e) => setTripTime(e.target.value)} />
+                    </div>
+                  </label>
+                </div>
+
+                <div className="booking-schedule-modal__actions">
+                  <button type="button" className="booking-schedule-modal__ghost" onClick={() => setShowScheduleModal(false)}>Cancelar</button>
+                  <button type="button" className="booking-schedule-modal__save" onClick={() => setShowScheduleModal(false)}>Salvar agendamento</button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

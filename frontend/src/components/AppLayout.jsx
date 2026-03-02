@@ -18,7 +18,6 @@ function AppLayout() {
         <header className="site-header">
           <div className="site-header__top">
             <div className="brand">
-              <div className="brand__icon">iD</div>
               <span className="brand__name">Aplayplay</span>
             </div>
 
@@ -47,7 +46,6 @@ function AppLayout() {
           <div className="container site-footer__top">
             <div>
               <div className="brand">
-                <div className="brand__icon">iD</div>
                 <span className="brand__name">Aplayplay</span>
               </div>
               <p className="site-footer__about">
@@ -88,3 +86,4 @@ function AppLayout() {
 }
 
 export default AppLayout
+
