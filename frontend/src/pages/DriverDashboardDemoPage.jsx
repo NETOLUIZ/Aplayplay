@@ -759,26 +759,15 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
                     </section>
 
                     {showMap && (
-                      <section className="driver-panel driver-panel--map">
-                      <div className="driver-map-badge">
-                        <span className="driver-map-badge__dot" />
-                        <div>
-                          <strong>Localizacao em Tempo Real</strong>
-                          <small>{isOnline ? driverDisplayCity : 'Status offline'}</small>
+                      <section className="driver-panel driver-panel--info">
+                        <div className="driver-panel__head">
+                          <h5>Status operacional</h5>
                         </div>
-                      </div>
-
-                      <div className="driver-map-controls">
-                        <button type="button">L</button>
-                        <button type="button">+</button>
-                        <button type="button">-</button>
-                      </div>
-
-                      <div className={`driver-map${isOnline ? '' : ' is-offline'}`} aria-hidden="true">
-                        <div className="driver-map__pin driver-map__pin--a" />
-                        <div className="driver-map__pin driver-map__pin--b" />
-                        <div className="driver-map__route" />
-                      </div>
+                        <div className="driver-panel__body-text">
+                          <p><strong>Local atual:</strong> {isOnline ? driverDisplayCity : 'Offline'}</p>
+                          <p><strong>Recebimento de corridas:</strong> {isOnline ? 'Ativo' : 'Pausado'}</p>
+                          <p><strong>Atualizacao:</strong> em tempo real via solicitacoes do painel.</p>
+                        </div>
                       </section>
                     )}
                   </div>
