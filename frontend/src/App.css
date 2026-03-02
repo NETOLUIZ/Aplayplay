@@ -4516,6 +4516,31 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .adminx__sidebar {
+    grid-template-columns: 1fr;
+    padding: 0.7rem;
+  }
+
+  .adminx__nav-btn {
+    width: 100%;
+  }
+
+  .adminx__filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.6rem;
+  }
+
+  .adminx__table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .adminx__table {
+    min-width: 720px;
+  }
+
   .site-header {
     padding: 0.75rem;
     border-radius: 14px;
@@ -4526,9 +4551,18 @@ body {
     flex-direction: column;
   }
 
+  .brand {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .site-nav--main {
     width: 100%;
     justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.2rem;
+    -webkit-overflow-scrolling: touch;
   }
 
   .header-actions {
@@ -4609,7 +4643,7 @@ body {
   }
 
   .booking-stage {
-    min-height: 720px;
+    min-height: 760px;
     border-radius: 20px;
   }
 
@@ -4637,19 +4671,22 @@ body {
 
   .booking-stage__controls {
     right: 0.65rem;
-    bottom: 0.65rem;
+    bottom: 7.6rem;
+    z-index: 40;
   }
 
   .booking-stage__fare-tag {
     left: 0.65rem;
-    bottom: 0.65rem;
+    bottom: 7.8rem;
     max-width: calc(100% - 4.2rem);
+    z-index: 35;
   }
 
   .booking-stage__traffic {
     right: 0.65rem;
-    bottom: 4.1rem;
+    bottom: 11.4rem;
     max-width: 170px;
+    z-index: 35;
   }
 
   .booking-stage__controls button {
@@ -4685,8 +4722,14 @@ body {
     padding: 0.72rem 0.85rem;
   }
 
+  .booking-stage--ride .booking-stage__controls,
+  .booking-stage--ride .booking-stage__fare-tag,
+  .booking-stage--ride .booking-stage__traffic {
+    display: none;
+  }
+
   .booking-stage--ride .booking-card--sheet {
-    max-height: min(69%, 620px);
+    max-height: min(74%, 680px);
     border-radius: 22px 22px 0 0;
   }
 
@@ -4751,6 +4794,22 @@ body {
     font-size: 1.3rem;
   }
 
+  .booking-field {
+    overflow: visible;
+  }
+
+  .booking-suggestions {
+    position: static;
+    margin-top: 0.45rem;
+    border-radius: 12px;
+    max-height: 240px;
+  }
+
+  .booking-suggestions__item {
+    grid-template-columns: 48px 1fr auto;
+    padding: 0.62rem 0.62rem;
+  }
+
   .booking-card__geo-actions {
     grid-template-columns: 1fr;
   }
@@ -4770,8 +4829,10 @@ body {
   .booking-chat-float {
     left: 0.65rem;
     right: 0.65rem;
-    bottom: 0.65rem;
+    bottom: 0.75rem;
     width: auto;
+    max-height: min(42vh, 360px);
+    overflow: auto;
   }
 
   .booking-card__submit {
@@ -4809,11 +4870,18 @@ body {
   .driver-topbar__actions {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: 0.45rem;
   }
 
   .driver-status-pill {
     flex: 1;
     justify-content: space-between;
+    min-width: 0;
+  }
+
+  .driver-bell {
+    flex-shrink: 0;
   }
 
   .driver-content {
@@ -4837,6 +4905,19 @@ body {
   .driver-panel__head {
     align-items: start;
     flex-direction: column;
+  }
+
+  .driver-ride-card__top {
+    flex-direction: column;
+  }
+
+  .driver-ride-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-share-panel__meta {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .driver-map {
@@ -4883,6 +4964,108 @@ body {
   .site-nav a {
     font-size: 0.82rem;
     padding: 0.42rem 0.62rem;
+  }
+
+  .adminx__shell {
+    width: calc(100% - 0.55rem);
+    border-radius: 14px;
+  }
+
+  .adminx__header {
+    padding: 0.8rem 0.75rem 0.75rem;
+  }
+
+  .adminx__header h1 {
+    font-size: 1.06rem;
+  }
+
+  .adminx__header p {
+    font-size: 0.74rem;
+  }
+
+  .adminx__filters,
+  .adminx__notice,
+  .adminx__driver-card,
+  .adminx__table-wrap,
+  .adminx__empty {
+    margin-left: 0.65rem;
+    margin-right: 0.65rem;
+  }
+
+  .adminx__driver-card {
+    padding: 0.72rem;
+  }
+
+  .booking-stage {
+    min-height: 780px;
+  }
+
+  .booking-stage--ride .booking-card--sheet {
+    max-height: min(77%, 700px);
+  }
+
+  .booking-card__head {
+    padding-inline: 0.9rem;
+  }
+
+  .booking-card__fields,
+  .booking-card__geo-actions,
+  .booking-card__schedule {
+    padding-inline: 0.9rem;
+  }
+
+  .booking-card__fare-preview,
+  .booking-card__divider,
+  .booking-card__geo-feedback,
+  .booking-card__ride-feedback {
+    margin-left: 0.9rem;
+    margin-right: 0.9rem;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .booking-smart-routes {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-dashboard-shell {
+    border-radius: 14px;
+  }
+
+  .driver-content {
+    padding: 0.65rem;
+  }
+
+  .driver-panel {
+    border-radius: 14px;
+  }
+
+  .driver-topbar__title h3 {
+    font-size: 0.95rem;
+  }
+
+  .driver-topbar__actions {
+    gap: 0.35rem;
+  }
+
+  .driver-status-pill {
+    width: 100%;
+    order: 1;
+  }
+
+  .driver-bell {
+    width: 2rem;
+    height: 2rem;
+    order: 2;
+  }
+
+  .driver-rides {
+    padding: 0.65rem;
+  }
+
+  .driver-chat-panel__messages,
+  .driver-support-chat__messages {
+    max-height: 180px;
   }
 }
 
