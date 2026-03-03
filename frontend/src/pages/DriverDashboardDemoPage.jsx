@@ -117,17 +117,24 @@ function appendChatMessage(rideId, message) {
 }
 
 function mapRideRequestToRideCard(request) {
+  const requestDistanceKm = Number(request?.distanceKm)
+  const requestDurationMin = Number(request?.durationMin)
+  const distanceKm = Number.isFinite(requestDistanceKm) && requestDistanceKm > 0 ? requestDistanceKm : null
+  const durationMin = Number.isFinite(requestDurationMin) && requestDurationMin > 0 ? requestDurationMin : null
+  const estimatedPrice = String(request?.estimatedPrice || request?.price || '').trim()
+
   return {
     id: request.id,
     initials: getInitials(request.passengerName || 'Passageiro'),
     passenger: request.passengerName || 'Passageiro',
     rating: '5.0',
-    price: 'R$ 0,00',
-    distanceKm: 2.2,
-    pickupDistance: request.pickupDistance || '1.8km',
+    price: estimatedPrice || 'R$ 0,00',
+    estimatedPrice: estimatedPrice || null,
+    distanceKm: distanceKm ?? 2.2,
+    pickupDistance: request.pickupDistance || (distanceKm ? `${distanceKm.toFixed(1)}km` : '1.8km'),
     pickup: request.origin || 'Origem nao informada',
-    durationMin: 17,
-    destinationTime: request.destinationTime || '17 min',
+    durationMin: durationMin ?? 17,
+    destinationTime: request.destinationTime || (durationMin ? `${Math.round(durationMin)} min` : '17 min'),
     destination: request.destination || 'Destino nao informado',
     accent: 'blue',
     status: request.status || 'pending',
@@ -365,6 +372,13 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
   const tariffNumbers = isTariffsEnabled ? typedTariffs : readDefaultTariffs()
 
   const ridesWithComputedPrice = rides.map((ride) => {
+    if (ride.estimatedPrice) {
+      return {
+        ...ride,
+        computedPrice: ride.estimatedPrice,
+      }
+    }
+
     const distanceKm = ride.distanceKm ?? Number(String(ride.pickupDistance || '0').replace(/[^\d.,]/g, '').replace(',', '.'))
     const durationMin = ride.durationMin ?? Number(String(ride.destinationTime || '0').replace(/[^\d.,]/g, '').replace(',', '.'))
     const total =
@@ -672,6 +686,13 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
                   </button>
                 </div>
               </div>
+
+              <section className="driver-alert driver-alert--warning" role="note" aria-live="polite">
+                <div>
+                  <strong>Atenção, motorista</strong>
+                  <p>Use esta ferramenta com responsabilidade. Trabalhe com tarifas acessíveis aos passageiros para fortalecer sua credibilidade.</p>
+                </div>
+              </section>
 
               {incomingRideAlert && (
                 <section className="driver-alert" role="status" aria-live="polite">

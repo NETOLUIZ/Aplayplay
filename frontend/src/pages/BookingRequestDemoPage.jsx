@@ -1797,7 +1797,12 @@ function BookingRequestDemoPage() {
               <>
                 <header className="booking-card__head">
                   <h3>Para onde vamos?</h3>
-                  <p>Reserve sua viagem com seguranca e preco justo.</p>
+                  <p>Reserve sua viagem com segurança e preço justo.</p>
+                  <p className="booking-card__passenger-note">
+                    Seja bem-vindo! O Aplayplay é uma ferramenta para você, passageiro, economizar com suas viagens.
+                    Caso ache tarifas altas, converse com o motorista, pois cada um pode ajustar os valores da corrida.
+                    Sempre negocie pela plataforma e viaje com pessoas de sua confiança, pois aqui você escolhe com quem viaja.
+                  </p>
                   <p className="booking-card__driver-badge">Atendimento em {city}</p>
                   <p className="booking-card__status">
                     {isPassengerLoggedIn
@@ -2084,6 +2089,3 @@ function BookingRequestDemoPage() {
 }
 
 export default BookingRequestDemoPage
-
-
-
