@@ -10,7 +10,6 @@ import {
   listRides,
   loginPassenger,
   postChatMessage,
-  sendWhatsAppVerificationCode,
   signupPassenger,
   updateRideStatus,
 } from '../services/api'
@@ -621,9 +620,6 @@ function BookingRequestDemoPage() {
   const [signupPhone, setSignupPhone] = useState('')
   const [signupAddress, setSignupAddress] = useState('')
   const [signupPhotoDataUrl, setSignupPhotoDataUrl] = useState('')
-  const [signupVerificationCode, setSignupVerificationCode] = useState('')
-  const [signupSendingCode, setSignupSendingCode] = useState(false)
-  const [signupCodeMessage, setSignupCodeMessage] = useState('')
   const [rideFeedback, setRideFeedback] = useState('')
   const [passengerMessage, setPassengerMessage] = useState('')
   const [activeRideId, setActiveRideId] = useState(null)
@@ -1214,11 +1210,6 @@ function BookingRequestDemoPage() {
       setAuthError('Preencha nome, e-mail, senha, telefone e endereco.')
       return
     }
-    if (apiEnabled && !signupVerificationCode.trim()) {
-      setAuthError('Informe o codigo enviado no WhatsApp para concluir o cadastro.')
-      return
-    }
-
     const newPassenger = {
       id: `PS-${Date.now()}`,
       fullName: signupFullName.trim(),
@@ -1238,7 +1229,6 @@ function BookingRequestDemoPage() {
         const result = await signupPassenger({
           ...newPassenger,
           driverSlug: slug,
-          verificationCode: signupVerificationCode.trim(),
         })
         const createdPassenger = result?.passenger || newPassenger
         writeJson(PASSENGER_STORAGE_KEY, createdPassenger)
@@ -1265,33 +1255,6 @@ function BookingRequestDemoPage() {
     setPassengerAccount(newPassenger)
     setAuthMode('login')
     setAuthError('Cadastro realizado. Agora entre com e-mail e senha.')
-  }
-
-  async function handleSendPassengerSignupCode() {
-    setAuthError('')
-    setSignupCodeMessage('')
-    if (!apiEnabled) {
-      setAuthError('Configure a API para enviar codigo por WhatsApp.')
-      return
-    }
-    if (!signupPhone.trim()) {
-      setAuthError('Informe o telefone antes de enviar o codigo.')
-      return
-    }
-
-    setSignupSendingCode(true)
-    try {
-      const result = await sendWhatsAppVerificationCode({
-        role: 'passenger',
-        phone: signupPhone.trim(),
-      })
-      const masked = result?.phoneMasked || 'seu numero'
-      setSignupCodeMessage(`Codigo enviado para ${masked}.`)
-    } catch (error) {
-      setAuthError(error.message || 'Nao foi possivel enviar o codigo.')
-    } finally {
-      setSignupSendingCode(false)
-    }
   }
 
   function handlePassengerPhotoChange(event) {
@@ -1779,27 +1742,6 @@ function BookingRequestDemoPage() {
                           />
                         </div>
                       </label>
-
-                      <label className="booking-field">
-                        <span>Codigo WhatsApp</span>
-                        <div>
-                          <i className="booking-field__icon booking-field__icon--origin">#</i>
-                          <input
-                            type="text"
-                            placeholder="Codigo de 6 digitos"
-                            value={signupVerificationCode}
-                            onChange={(e) => setSignupVerificationCode(String(e.target.value || '').replace(/\D/g, '').slice(0, 6))}
-                          />
-                          <button
-                            type="button"
-                            onClick={handleSendPassengerSignupCode}
-                            disabled={signupSendingCode}
-                          >
-                            {signupSendingCode ? '...' : 'Enviar'}
-                          </button>
-                        </div>
-                      </label>
-                      {signupCodeMessage && <p className="booking-auth-help">{signupCodeMessage}</p>}
 
                       <label className="booking-field">
                         <span>Endereco</span>

@@ -410,7 +410,6 @@ app.post('/api/drivers/signup', (req, res) => {
   const vehiclePlate = String(req.body?.vehiclePlate || '').trim().toUpperCase()
   const vehicleCategory = String(req.body?.vehicleCategory || '').trim()
   const city = String(req.body?.city || '').trim()
-  const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!fullName || !email || !phone || !vehicleModel || !vehicleYear || !vehiclePlate) {
     res.status(400).json({ error: 'Campos obrigatorios faltando no cadastro do motorista.' })
@@ -420,12 +419,6 @@ app.post('/api/drivers/signup', (req, res) => {
     res.status(409).json({ error: 'Ja existe motorista com esse e-mail.' })
     return
   }
-  const verificationResult = consumeVerificationCode('driver', phone, verificationCode)
-  if (!verificationResult.ok) {
-    res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
-    return
-  }
-
   const created = {
     id: `DRV-${Date.now()}`,
     fullName,
@@ -521,7 +514,6 @@ app.post('/api/passengers/signup', (req, res) => {
   const phone = normalizePhone(req.body?.phone)
   const address = String(req.body?.address || '').trim()
   const driverSlug = String(req.body?.driverSlug || '').trim().toLowerCase()
-  const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!driverSlug) {
     res.status(400).json({ error: 'Cadastro de passageiro permitido apenas via link/QR do motorista.' })
@@ -549,12 +541,6 @@ app.post('/api/passengers/signup', (req, res) => {
     res.status(403).json({ error: 'Motorista desativado pelo admin.' })
     return
   }
-  const verificationResult = consumeVerificationCode('passenger', phone, verificationCode)
-  if (!verificationResult.ok) {
-    res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
-    return
-  }
-
   const created = {
     id: `PS-${Date.now()}`,
     fullName,
@@ -619,7 +605,6 @@ app.post('/api/auth/register', (req, res) => {
     || '',
   ).trim().toLowerCase()
   const email = String(req.body?.email || `${String(phone).replace(/\D/g, '')}@passageiro.local`).trim().toLowerCase()
-  const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!driverIdentifier) {
     res.status(400).json({ error: 'Primeiro cadastro do passageiro deve ser pelo QR/link do motorista.' })
@@ -653,11 +638,6 @@ app.post('/api/auth/register', (req, res) => {
   }
   if (driver.isActive === false) {
     res.status(403).json({ error: 'Motorista desativado pelo admin.' })
-    return
-  }
-  const verificationResult = consumeVerificationCode('passenger', phone, verificationCode)
-  if (!verificationResult.ok) {
-    res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
     return
   }
   linkPassengerToDriver(passenger.id, driver.id)
