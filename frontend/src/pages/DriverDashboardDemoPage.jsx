@@ -122,7 +122,10 @@ function mapRideRequestToRideCard(request) {
   const requestDurationMin = Number(request?.durationMin)
   const distanceKm = Number.isFinite(requestDistanceKm) && requestDistanceKm > 0 ? requestDistanceKm : null
   const durationMin = Number.isFinite(requestDurationMin) && requestDurationMin > 0 ? requestDurationMin : null
-  const estimatedPrice = String(request?.estimatedPrice || request?.price || '').trim()
+  const estimatedFareNumber = Number(request?.estimatedFare)
+  const estimatedPrice = Number.isFinite(estimatedFareNumber) && estimatedFareNumber > 0
+    ? formatCurrency(estimatedFareNumber)
+    : String(request?.estimatedPrice || request?.price || '').trim()
 
   return {
     id: request.id,
