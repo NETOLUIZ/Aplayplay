@@ -42,26 +42,6 @@ function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
-function mergeDrivers(apiDrivers, localDrivers) {
-  const byKey = new Map()
-  const safeApi = Array.isArray(apiDrivers) ? apiDrivers : []
-  const safeLocal = Array.isArray(localDrivers) ? localDrivers : []
-
-  const put = (driver) => {
-    const id = String(driver?.id || '').trim()
-    const email = String(driver?.email || '').trim().toLowerCase()
-    const slug = String(driver?.slug || '').trim().toLowerCase()
-    const key = id || email || slug
-    if (!key) return
-    const previous = byKey.get(key) || {}
-    byKey.set(key, { ...previous, ...driver })
-  }
-
-  safeLocal.forEach(put)
-  safeApi.forEach(put)
-  return Array.from(byKey.values())
-}
-
 function getDriverIdentifier(driver) {
   return String(driver?.id || driver?.email || driver?.slug || '').trim()
 }
@@ -117,10 +97,8 @@ function AdminTraderPage() {
 
         const apiDrivers = Array.isArray(driversRes?.drivers) ? driversRes.drivers : []
         const apiPassengers = Array.isArray(passengersRes?.passengers) ? passengersRes.passengers : []
-        const localDrivers = readJson(DRIVER_LIST_KEY, [])
-        const mergedDrivers = mergeDrivers(apiDrivers, localDrivers)
-
-        setDrivers(mergedDrivers)
+        setDrivers(apiDrivers)
+        writeJson(DRIVER_LIST_KEY, apiDrivers)
         setPassengers(apiPassengers)
       } catch (error) {
         if (!cancelled) {
@@ -232,7 +210,11 @@ function AdminTraderPage() {
       const result = await patchAdminDriver(driverId, patch)
       const updated = result?.driver
       if (!updated) return
-      setDrivers((current) => current.map((driver) => (String(driver.id) === String(driverId) ? updated : driver)))
+      setDrivers((current) => {
+        const next = current.map((driver) => (matchesDriverIdentifier(driver, driverId) ? updated : driver))
+        writeJson(DRIVER_LIST_KEY, next)
+        return next
+      })
     } catch (error) {
       const message = String(error?.message || 'Nao foi possivel atualizar motorista na API.')
       if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
@@ -262,7 +244,11 @@ function AdminTraderPage() {
     if (apiEnabled) {
       try {
         await deleteAdminDriver(targetId)
-        setDrivers((current) => current.filter((item) => !matchesDriverIdentifier(item, targetId)))
+        setDrivers((current) => {
+          const next = current.filter((item) => !matchesDriverIdentifier(item, targetId))
+          writeJson(DRIVER_LIST_KEY, next)
+          return next
+        })
         setAdminNotice('Motorista excluido com sucesso.')
         return
       } catch (error) {
