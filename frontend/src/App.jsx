@@ -21,7 +21,7 @@ function App() {
         <Route path="/passageiro/solicitar/:motoristaId" element={<BookingRequestDemoPage />} />
         <Route path="/motorista" element={<Navigate to="/motorista/login" replace />} />
         <Route path="/motorista/login" element={<LoginPage />} />
-        <Route path="/motorista/cadastro" element={<DriverSignupPage />} />
+        <Route path="/motorista/cadastro" element={<Navigate to="/cadastro/motorista" replace />} />
         <Route path="/motorista/dashboard" element={<DriverDashboardDemoPage requireRegistration />} />
         <Route path="/admin" element={<Navigate to="/admin/trader" replace />} />
         <Route path="/m/:motoristaId" element={<PassengerInviteEntryPage />} />

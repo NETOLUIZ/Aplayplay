@@ -74,6 +74,13 @@ export async function loginDriver(payload) {
   })
 }
 
+export async function patchDriverTariffs(id, tariffs) {
+  return request(`/api/drivers/${id}/tariffs`, {
+    method: 'PATCH',
+    body: JSON.stringify({ tariffs }),
+  })
+}
+
 export async function getPublicDriverBySlug(slug) {
   const encoded = encodeURIComponent(String(slug || '').trim())
   return request(`/api/drivers/${encoded}/public`, { method: 'GET' })

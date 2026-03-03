@@ -442,6 +442,32 @@ app.post('/api/drivers/login', (req, res) => {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
   }
+  if (driver.isActive === false) {
+    res.status(403).json({ error: 'Motorista desativado pelo admin.' })
+    return
+  }
+  res.json({ driver })
+})
+
+app.patch('/api/drivers/:id/tariffs', (req, res) => {
+  const id = String(req.params.id || '').trim()
+  const driver = drivers.find((item) => String(item.id) === id)
+  if (!driver) {
+    res.status(404).json({ error: 'Motorista nao encontrado.' })
+    return
+  }
+  if (driver.isActive === false) {
+    res.status(403).json({ error: 'Motorista desativado pelo admin.' })
+    return
+  }
+
+  const patchTariffs = req.body?.tariffs || req.body || {}
+  driver.tariffs = {
+    perKm: String(patchTariffs.perKm || driver?.tariffs?.perKm || '3,80'),
+    perMinute: String(patchTariffs.perMinute || driver?.tariffs?.perMinute || '0,55'),
+    displacementFee: String(patchTariffs.displacementFee || driver?.tariffs?.displacementFee || '5,00'),
+  }
+  driver.updatedAt = new Date().toISOString()
   res.json({ driver })
 })
 
@@ -460,6 +486,7 @@ app.get('/api/drivers/:slug/public', (req, res) => {
       vehicleCategory: driver.vehicleCategory,
       city: driver.city,
       slug: driver.slug,
+      isActive: driver.isActive !== false,
       tariffsEnabled: driver.tariffsEnabled !== false,
       tariffs: {
         perKm: String(driver?.tariffs?.perKm || '3,80'),
@@ -499,6 +526,10 @@ app.post('/api/passengers/signup', (req, res) => {
   const driver = findDriverByIdentifier(driverSlug)
   if (!driver) {
     res.status(404).json({ error: 'Motorista do QR/link nao encontrado.' })
+    return
+  }
+  if (driver.isActive === false) {
+    res.status(403).json({ error: 'Motorista desativado pelo admin.' })
     return
   }
   const verificationResult = consumeVerificationCode('passenger', phone, verificationCode)
@@ -551,6 +582,7 @@ app.post('/api/passengers/login', (req, res) => {
     id: driver.id,
     slug: driver.slug,
     fullName: driver.fullName,
+    isActive: driver.isActive !== false,
     whatsapp: driver.phone,
     city: driver.city,
     vehicleModel: driver.vehicleModel,
@@ -602,6 +634,10 @@ app.post('/api/auth/register', (req, res) => {
     res.status(404).json({ error: 'Motorista do link nao encontrado.' })
     return
   }
+  if (driver.isActive === false) {
+    res.status(403).json({ error: 'Motorista desativado pelo admin.' })
+    return
+  }
   const verificationResult = consumeVerificationCode('passenger', phone, verificationCode)
   if (!verificationResult.ok) {
     res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
@@ -651,6 +687,7 @@ app.post('/api/auth/login', (req, res) => {
     id: driver.id,
     slug: driver.slug,
     fullName: driver.fullName,
+    isActive: driver.isActive !== false,
     whatsapp: driver.phone,
     city: driver.city,
     vehicleModel: driver.vehicleModel,
@@ -669,6 +706,7 @@ app.get('/api/passengers/me/drivers', authRequired, passengerRequired, (req, res
     id: driver.id,
     slug: driver.slug,
     fullName: driver.fullName,
+    isActive: driver.isActive !== false,
     whatsapp: driver.phone,
     city: driver.city,
     vehicleModel: driver.vehicleModel,
@@ -699,6 +737,10 @@ app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, re
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
   }
+  if (driver.isActive === false) {
+    res.status(403).json({ error: 'Motorista desativado pelo admin.' })
+    return
+  }
   const link = linkPassengerToDriver(passenger.id, driver.id)
   passenger.driverSlug = passenger.driverSlug || driver.slug
   res.status(201).json({
@@ -707,6 +749,7 @@ app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, re
       id: driver.id,
       slug: driver.slug,
       fullName: driver.fullName,
+      isActive: driver.isActive !== false,
       whatsapp: driver.phone,
       city: driver.city,
     },
@@ -739,6 +782,16 @@ app.post('/api/rides', (req, res) => {
       res.status(403).json({ error: 'Passageiro sem vinculo com este motorista.' })
       return
     }
+  }
+
+  const requestedDriver = findDriverByIdentifier(requestedDriverSlug)
+  if (!requestedDriver) {
+    res.status(404).json({ error: 'Motorista nao encontrado para essa solicitacao.' })
+    return
+  }
+  if (requestedDriver.isActive === false) {
+    res.status(403).json({ error: 'Motorista desativado pelo admin.' })
+    return
   }
 
   const ride = {

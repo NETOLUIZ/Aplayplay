@@ -340,9 +340,6 @@ async function fetchOsrmRoutes(fromPoint, toPoint, allowAlternatives) {
 }
 
 function readTariffsFromDriverProfile(driverProfile) {
-  if (driverProfile?.tariffsEnabled === false) {
-    return { perKm: 3.8, perMinute: 0.55, displacementFee: 5 }
-  }
   if (driverProfile?.tariffs) {
     return {
       perKm: parseBrazilianCurrencyInput(driverProfile.tariffs?.perKm) || 3.8,
@@ -353,9 +350,6 @@ function readTariffsFromDriverProfile(driverProfile) {
 
   try {
     const account = JSON.parse(localStorage.getItem(DRIVER_ACCOUNT_KEY) || 'null')
-    if (account?.tariffsEnabled === false) {
-      return { perKm: 3.8, perMinute: 0.55, displacementFee: 5 }
-    }
     const tariffs = account?.tariffs
     return {
       perKm: parseBrazilianCurrencyInput(tariffs?.perKm) || 3.8,
@@ -666,6 +660,7 @@ function BookingRequestDemoPage() {
       vehiclePlate: searchParams.get('plate') || '---',
       vehicleCategory: searchParams.get('category') || 'Motorista Parceiro',
       city: searchParams.get('city') || 'Fortaleza, CE',
+      isActive: true,
       tariffsEnabled: true,
       tariffs: null,
     }),
@@ -687,6 +682,7 @@ function BookingRequestDemoPage() {
     .toUpperCase() || 'CS'
   const fallbackRoutePositions = [passengerPoint, driverPoint, destinationPoint]
   const tariffs = useMemo(() => readTariffsFromDriverProfile(driverProfile), [driverProfile])
+  const isDriverActive = driverProfile?.isActive !== false
   const routeCandidates = useMemo(
     () => tripRoutes.map((route, index) => {
       const traffic = buildRouteTraffic(route.points, route.distanceKm, route.baseDurationMin, trafficTick)
@@ -726,12 +722,12 @@ function BookingRequestDemoPage() {
     return 'livre'
   }, [selectedTripRoute])
   const estimatedFare = useMemo(
-    () => (hasDriverLink ? (
+    () => (hasDriverLink && isDriverActive ? (
       tariffs.displacementFee
       + tripDistanceKm * tariffs.perKm
       + estimatedDurationMin * tariffs.perMinute
     ) : 0),
-    [hasDriverLink, tariffs, tripDistanceKm, estimatedDurationMin],
+    [hasDriverLink, isDriverActive, tariffs, tripDistanceKm, estimatedDurationMin],
   )
   const estimatedFareLabel = formatCurrencyBRL(estimatedFare)
 
@@ -757,6 +753,7 @@ function BookingRequestDemoPage() {
               vehiclePlate: String(driver.vehiclePlate || current.vehiclePlate || '---'),
               vehicleCategory: String(driver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
               city: String(driver.city || current.city || 'Fortaleza, CE'),
+              isActive: driver.isActive !== false,
               tariffsEnabled: driver.tariffsEnabled !== false,
               tariffs: driver.tariffs || current.tariffs || null,
             }))
@@ -778,6 +775,7 @@ function BookingRequestDemoPage() {
             vehiclePlate: String(localDriver.vehiclePlate || current.vehiclePlate || '---'),
             vehicleCategory: String(localDriver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
             city: String(localDriver.city || current.city || 'Fortaleza, CE'),
+            isActive: localDriver.isActive !== false,
             tariffsEnabled: localDriver.tariffsEnabled !== false,
             tariffs: localDriver.tariffs || current.tariffs || null,
           }))
@@ -1384,6 +1382,10 @@ function BookingRequestDemoPage() {
     }
     if (!hasDriverLink) {
       setRideFeedback('Conta sem motorista vinculado. Use o QR code do motorista para vincular e solicitar.')
+      return
+    }
+    if (!isDriverActive) {
+      setRideFeedback('Este motorista esta desativado no momento. Escolha outro motorista ou tente mais tarde.')
       return
     }
 

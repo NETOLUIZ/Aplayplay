@@ -15,19 +15,6 @@ import {
 const ADMIN_AUTH_KEY = 'Aplayplay_admin_auth'
 const DRIVER_LIST_KEY = 'Aplayplay_driver_accounts'
 
-function parseBrazilianCurrencyInput(value) {
-  const normalized = String(value ?? '')
-    .replace(/[^\d,.-]/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function formatBrazilianDecimal(value) {
-  return Number(value).toFixed(2).replace('.', ',')
-}
-
 function formatDate(value) {
   const date = value ? new Date(value) : new Date()
   if (Number.isNaN(date.getTime())) return '--/--/----'
@@ -93,8 +80,6 @@ function AdminTraderPage() {
   const [drivers, setDrivers] = useState([])
   const [passengers, setPassengers] = useState([])
   const [adminNotice, setAdminNotice] = useState('')
-  const [adminTariffMessage, setAdminTariffMessage] = useState('')
-  const [adminTariffs, setAdminTariffs] = useState({ perKm: '', perMinute: '', displacementFee: '' })
 
   useEffect(() => {
     const auth = readJson(ADMIN_AUTH_KEY, null)
@@ -174,22 +159,6 @@ function AdminTraderPage() {
     return { totalHours, totalTrips, totalGross, avgRating }
   }, [drivers])
 
-  function handleTariffInputChange(field, value) {
-    setAdminTariffs((current) => ({ ...current, [field]: value }))
-  }
-
-  function normalizeAdminTariffs(baseTariffs = {}) {
-    const basePerKm = parseBrazilianCurrencyInput(baseTariffs?.perKm) || 3.8
-    const basePerMinute = parseBrazilianCurrencyInput(baseTariffs?.perMinute) || 0.55
-    const baseDisplacementFee = parseBrazilianCurrencyInput(baseTariffs?.displacementFee) || 5
-
-    return {
-      perKm: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.perKm) || basePerKm),
-      perMinute: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.perMinute) || basePerMinute),
-      displacementFee: formatBrazilianDecimal(parseBrazilianCurrencyInput(adminTariffs.displacementFee) || baseDisplacementFee),
-    }
-  }
-
   async function handleAdminLogin(event) {
     event.preventDefault()
     setAdminAuthError('')
@@ -264,65 +233,6 @@ function AdminTraderPage() {
 
   async function toggleDriverStatus(driverId, active) {
     await updateDriverById(driverId, { isActive: active })
-  }
-
-  async function toggleTariffsFeature(driverId, tariffsEnabled) {
-    await updateDriverById(driverId, { tariffsEnabled })
-  }
-
-  async function applyAdminTariffs(driverId) {
-    const targetDriver = drivers.find((driver) => String(driver.id) === String(driverId))
-    const normalized = normalizeAdminTariffs(targetDriver?.tariffs || {})
-    setAdminTariffs(normalized)
-    await updateDriverById(driverId, { tariffs: normalized })
-    setAdminTariffMessage('Tarifas padrao aplicadas para este motorista.')
-  }
-
-  async function applyAdminTariffsToAllDrivers() {
-    if (!drivers.length) {
-      setAdminNotice('Nenhum motorista encontrado para aplicar tarifas.')
-      return
-    }
-
-    const normalized = normalizeAdminTariffs()
-    setAdminTariffs(normalized)
-
-    try {
-      const results = await Promise.allSettled(
-        drivers.map((driver) => patchAdminDriver(driver.id, { tariffs: normalized })),
-      )
-
-      const updatedDrivers = []
-      let updatedCount = 0
-
-      results.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value?.driver) {
-          updatedDrivers.push(result.value.driver)
-          updatedCount += 1
-        }
-      })
-
-      if (updatedDrivers.length > 0) {
-        const byId = new Map(updatedDrivers.map((driver) => [String(driver.id), driver]))
-        setDrivers((current) => current.map((driver) => byId.get(String(driver.id)) || driver))
-      }
-
-      const failedCount = drivers.length - updatedCount
-      setAdminTariffMessage(
-        failedCount > 0
-          ? `Tarifas aplicadas em ${updatedCount} motorista(s). ${failedCount} falharam.`
-          : `Tarifas aplicadas para todos os ${updatedCount} motorista(s).`,
-      )
-    } catch (error) {
-      const message = String(error?.message || 'Nao foi possivel aplicar tarifas para todos.')
-      if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
-        localStorage.removeItem(ADMIN_AUTH_KEY)
-        setIsAdminAuthenticated(false)
-        setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
-        return
-      }
-      setAdminNotice(message)
-    }
   }
 
   async function removeDriver(driver) {
@@ -526,11 +436,6 @@ function AdminTraderPage() {
               )}
               {menu === 'passageiros' && <button type="button" className="btn btn--ghost" onClick={exportPassengersCsv}>Exportar CSV</button>}
               {menu === 'motoristas' && <button type="button" className="btn btn--primary" onClick={() => navigate('/cadastro/motorista')}>Novo Motorista</button>}
-              {menu === 'motoristas' && (
-                <button type="button" className="btn btn--ghost" onClick={() => { void applyAdminTariffsToAllDrivers() }}>
-                  Aplicar tarifas para todos
-                </button>
-              )}
               {menu === 'estatisticas' && <button type="button" className="btn btn--primary" onClick={() => setAdminNotice('Exportacao de PDF disponivel apos integrar dados reais.')}>Exportar PDF</button>}
               <button type="button" className="btn btn--ghost" onClick={() => { void handleAdminLogout() }}>Sair do Admin</button>
             </div>
@@ -618,7 +523,6 @@ function AdminTraderPage() {
 
           {menu === 'motoristas' && filteredDrivers.length > 0 && filteredDrivers.map((driver) => {
             const active = driver.isActive !== false
-            const tariffsOn = driver.tariffsEnabled !== false
             const currentTariffs = driver.tariffs || { perKm: '3,80', perMinute: '0,55', displacementFee: '5,00' }
             return (
               <article key={driver.id || driver.email || driver.fullName} className="adminx__driver-card">
@@ -644,30 +548,25 @@ function AdminTraderPage() {
                     <input type="checkbox" checked={active} onChange={(e) => { void toggleDriverStatus(driver.id, e.target.checked) }} />
                     <span>Ativar motorista</span>
                   </label>
-                  <label>
-                    <input type="checkbox" checked={!tariffsOn} onChange={(e) => { void toggleTariffsFeature(driver.id, !e.target.checked) }} />
-                    <span>Bloquear tarifa</span>
-                  </label>
                 </div>
 
                 <div className="adminx__tariffs">
-                  <h4>Tarifas padrao individuais</h4>
+                  <h4>Tarifa em uso pelo motorista</h4>
                   <div className="adminx__tariffs-grid">
                     <label>
                       <span>Valor por KM (R$)</span>
-                      <input type="text" value={adminTariffs.perKm !== '' ? adminTariffs.perKm : (currentTariffs.perKm || '')} onChange={(e) => handleTariffInputChange('perKm', e.target.value)} />
+                      <input type="text" value={currentTariffs.perKm || ''} readOnly />
                     </label>
                     <label>
                       <span>Valor por Minuto (R$)</span>
-                      <input type="text" value={adminTariffs.perMinute !== '' ? adminTariffs.perMinute : (currentTariffs.perMinute || '')} onChange={(e) => handleTariffInputChange('perMinute', e.target.value)} />
+                      <input type="text" value={currentTariffs.perMinute || ''} readOnly />
                     </label>
                     <label>
                       <span>Taxa de Deslocamento (R$)</span>
-                      <input type="text" value={adminTariffs.displacementFee !== '' ? adminTariffs.displacementFee : (currentTariffs.displacementFee || '')} onChange={(e) => handleTariffInputChange('displacementFee', e.target.value)} />
+                      <input type="text" value={currentTariffs.displacementFee || ''} readOnly />
                     </label>
                   </div>
                   <div className="adminx__tariffs-actions">
-                    <button className="btn btn--primary btn--block" type="button" onClick={() => { void applyAdminTariffs(driver.id) }}>Aplicar Tarifas</button>
                     <button className="btn btn--ghost btn--block" type="button" onClick={() => { void changeDriverPassword(driver) }}>
                       Trocar senha
                     </button>
@@ -675,7 +574,6 @@ function AdminTraderPage() {
                       Excluir motorista
                     </button>
                   </div>
-                  {adminTariffMessage && <p className="adminx__hint">{adminTariffMessage}</p>}
                 </div>
               </article>
             )

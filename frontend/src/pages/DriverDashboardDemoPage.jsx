@@ -11,6 +11,7 @@ import {
   isApiEnabled,
   listChatMessages,
   listRides,
+  patchDriverTariffs,
   postChatMessage,
   updateRideStatus as updateRideStatusApi,
 } from '../services/api'
@@ -503,10 +504,25 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
     setTariffs((current) => ({ ...current, [key]: value }))
   }
 
-  function saveTariffs() {
+  async function saveTariffs() {
     if (!isTariffsEnabled) {
       setSavedMessage(DEMO_TARIFF_LOCK_MESSAGE)
       return
+    }
+    if (apiEnabled && driverAccount?.id) {
+      try {
+        const result = await patchDriverTariffs(driverAccount.id, tariffs)
+        const updated = result?.driver
+        if (updated?.tariffs) {
+          updateDriverAccount({ tariffs: updated.tariffs })
+          setTariffs((current) => ({ ...current, ...updated.tariffs }))
+          setSavedMessage('Tarifas salvas')
+          return
+        }
+      } catch (error) {
+        setSavedMessage(error?.message || 'Nao foi possivel salvar tarifas na API.')
+        return
+      }
     }
     updateDriverAccount({ tariffs })
     setSavedMessage('Tarifas salvas')
