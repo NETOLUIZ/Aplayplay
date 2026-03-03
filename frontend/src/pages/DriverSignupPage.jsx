@@ -7,12 +7,12 @@ const initialForm = {
   fullName: '',
   email: '',
   phone: '',
-  city: 'Fortaleza, CE',
+  city: '',
   photoDataUrl: '',
   vehicleModel: '',
   vehicleYear: '',
   vehiclePlate: '',
-  vehicleCategory: 'Particular',
+  vehicleCategory: '',
 }
 
 function maskBrazilPhone(value) {
@@ -108,8 +108,7 @@ function DriverSignupPage() {
         phone: form.phone,
       })
       const masked = result?.phoneMasked || 'seu numero'
-      const demoSuffix = result?.demoCode ? ` (demo: ${result.demoCode})` : ''
-      setVerificationMessage(`Codigo enviado para ${masked}.${demoSuffix}`)
+      setVerificationMessage(`Codigo enviado para ${masked}.`)
     } catch (err) {
       setError(err.message || 'Nao foi possivel enviar o codigo agora.')
     } finally {
@@ -293,10 +292,11 @@ function DriverSignupPage() {
                       value={form.vehicleCategory}
                       onChange={(e) => updateField('vehicleCategory', e.target.value)}
                     >
-                      <option>Particular</option>
-                      <option>Executivo</option>
-                      <option>Taxi</option>
-                      <option>SUV</option>
+                      <option value="">Selecione uma categoria</option>
+                      <option value="Particular">Particular</option>
+                      <option value="Executivo">Executivo</option>
+                      <option value="Taxi">Taxi</option>
+                      <option value="SUV">SUV</option>
                     </select>
                   </label>
                 </div>

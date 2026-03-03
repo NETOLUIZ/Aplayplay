@@ -52,7 +52,22 @@ function slugify(text) {
 }
 
 function normalizePhone(value) {
-  return String(value || '').replace(/\D/g, '')
+  let digits = String(value || '').replace(/\D/g, '')
+
+  // Normaliza numeros BR com DDI +55 para comparar cadastro e login sem divergencia
+  if (digits.length >= 12 && digits.startsWith('55')) {
+    digits = digits.slice(2)
+  }
+
+  if (digits.length > 11) {
+    digits = digits.slice(-11)
+  }
+
+  if (digits.length > 10 && digits.startsWith('0')) {
+    digits = digits.slice(1)
+  }
+
+  return digits
 }
 
 function createToken() {
@@ -391,8 +406,8 @@ app.post('/api/drivers/signup', (req, res) => {
   const vehicleModel = String(req.body?.vehicleModel || '').trim()
   const vehicleYear = String(req.body?.vehicleYear || '').trim()
   const vehiclePlate = String(req.body?.vehiclePlate || '').trim().toUpperCase()
-  const vehicleCategory = String(req.body?.vehicleCategory || 'Particular').trim()
-  const city = String(req.body?.city || 'Fortaleza, CE').trim()
+  const vehicleCategory = String(req.body?.vehicleCategory || '').trim()
+  const city = String(req.body?.city || '').trim()
   const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!fullName || !email || !phone || !vehicleModel || !vehicleYear || !vehiclePlate) {

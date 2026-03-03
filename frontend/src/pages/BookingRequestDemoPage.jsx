@@ -601,7 +601,7 @@ function BookingRequestDemoPage() {
   const destinationInputRef = useRef(null)
   const warmCacheRef = useRef(false)
 
-  const [origin, setOrigin] = useState('Beira Mar, Fortaleza')
+  const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
   const [originSuggestions, setOriginSuggestions] = useState([])
   const [destinationSuggestions, setDestinationSuggestions] = useState([])
@@ -659,7 +659,7 @@ function BookingRequestDemoPage() {
       vehicleModel: searchParams.get('vehicle') || 'Veiculo nao informado',
       vehiclePlate: searchParams.get('plate') || '---',
       vehicleCategory: searchParams.get('category') || 'Motorista Parceiro',
-      city: searchParams.get('city') || 'Fortaleza, CE',
+      city: searchParams.get('city') || '',
       isActive: true,
       tariffsEnabled: true,
       tariffs: null,
@@ -672,7 +672,8 @@ function BookingRequestDemoPage() {
   const vehicle = driverProfile.vehicleModel || 'Veiculo nao informado'
   const plate = driverProfile.vehiclePlate || '---'
   const category = driverProfile.vehicleCategory || 'Motorista Parceiro'
-  const city = driverProfile.city || 'Fortaleza, CE'
+  const city = driverProfile.city || ''
+  const cityLabel = city || 'sua cidade'
   const driverInitials = driverName
     .split(' ')
     .filter(Boolean)
@@ -752,7 +753,7 @@ function BookingRequestDemoPage() {
               vehicleModel: String(driver.vehicleModel || current.vehicleModel || 'Veiculo nao informado'),
               vehiclePlate: String(driver.vehiclePlate || current.vehiclePlate || '---'),
               vehicleCategory: String(driver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
-              city: String(driver.city || current.city || 'Fortaleza, CE'),
+              city: String(driver.city || current.city || ''),
               isActive: driver.isActive !== false,
               tariffsEnabled: driver.tariffsEnabled !== false,
               tariffs: driver.tariffs || current.tariffs || null,
@@ -774,7 +775,7 @@ function BookingRequestDemoPage() {
           vehicleModel: String(localDriver.vehicleModel || current.vehicleModel || 'Veiculo nao informado'),
             vehiclePlate: String(localDriver.vehiclePlate || current.vehiclePlate || '---'),
             vehicleCategory: String(localDriver.vehicleCategory || current.vehicleCategory || 'Motorista Parceiro'),
-            city: String(localDriver.city || current.city || 'Fortaleza, CE'),
+            city: String(localDriver.city || current.city || ''),
             isActive: localDriver.isActive !== false,
             tariffsEnabled: localDriver.tariffsEnabled !== false,
             tariffs: localDriver.tariffs || current.tariffs || null,
@@ -1274,8 +1275,7 @@ function BookingRequestDemoPage() {
         phone: signupPhone.trim(),
       })
       const masked = result?.phoneMasked || 'seu numero'
-      const demoSuffix = result?.demoCode ? ` (demo: ${result.demoCode})` : ''
-      setSignupCodeMessage(`Codigo enviado para ${masked}.${demoSuffix}`)
+      setSignupCodeMessage(`Codigo enviado para ${masked}.`)
     } catch (error) {
       setAuthError(error.message || 'Nao foi possivel enviar o codigo.')
     } finally {
@@ -1388,6 +1388,14 @@ function BookingRequestDemoPage() {
       setRideFeedback('Este motorista esta desativado no momento. Escolha outro motorista ou tente mais tarde.')
       return
     }
+    if (!origin.trim()) {
+      setRideFeedback('Informe a origem da viagem para continuar.')
+      return
+    }
+    if (!destination.trim()) {
+      setRideFeedback('Informe o destino da viagem para continuar.')
+      return
+    }
 
     const requestId = Date.now()
     const request = {
@@ -1397,7 +1405,7 @@ function BookingRequestDemoPage() {
       driverSlug: activeDriverSlug,
       driverName,
       origin,
-      destination: destination || 'Destino a confirmar',
+      destination,
       pickupDistance: `${pickupDistanceKm.toFixed(1)}km`,
       destinationTime: tripTime ? `Agendada ${tripTime}` : `${estimatedDurationMin} min`,
       distanceKm: Number(tripDistanceKm.toFixed(2)),
@@ -1648,7 +1656,7 @@ function BookingRequestDemoPage() {
 
             {isRideLayout && (
               <div className="booking-stage__ride-header">
-                <p className="booking-stage__ride-city">Atendimento em {city}</p>
+                <p className="booking-stage__ride-city">Atendimento em {cityLabel}</p>
                 <button type="button" className="booking-stage__ride-search" onClick={focusDestinationFromHeader}>
                   Para onde vamos?
                 </button>
@@ -1683,7 +1691,7 @@ function BookingRequestDemoPage() {
                       ? 'Crie sua conta para poder solicitar corridas.'
                       : 'Entre com e-mail e senha para liberar a solicitacao.'}
                   </p>
-                  <p className="booking-card__driver-badge">Atendimento em {city}</p>
+                  <p className="booking-card__driver-badge">Atendimento em {cityLabel}</p>
                   {!allowPassengerSignup && (
                     <p className="booking-auth-help">
                       Cadastro liberado somente via QR code/link oficial do motorista.
@@ -1864,7 +1872,7 @@ function BookingRequestDemoPage() {
                     Caso ache tarifas altas, converse com o motorista, pois cada um pode ajustar os valores da corrida.
                     Sempre negocie pela plataforma e viaje com pessoas de sua confiança, pois aqui você escolhe com quem viaja.
                   </p>
-                  <p className="booking-card__driver-badge">Atendimento em {city}</p>
+                  <p className="booking-card__driver-badge">Atendimento em {cityLabel}</p>
                   <p className="booking-card__status">
                     {isPassengerLoggedIn
                       ? `Passageiro autenticado: ${passengerAccount?.fullName ?? 'Conta ativa'}`

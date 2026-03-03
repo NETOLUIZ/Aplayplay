@@ -9,7 +9,7 @@ function PassengerLoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const motoristaId = String(searchParams.get('motoristaId') || '').trim()
-  const [telefone, setTelefone] = useState('')
+  const [loginValue, setLoginValue] = useState('')
   const [senha, setSenha] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -18,14 +18,16 @@ function PassengerLoginPage() {
   async function onSubmit(event) {
     event.preventDefault()
     setError('')
-    if (!telefone.trim() || !senha.trim()) {
-      setError('Informe telefone e senha.')
+    if (!loginValue.trim() || !senha.trim()) {
+      setError('Informe telefone (ou e-mail) e senha.')
       return
     }
     setLoading(true)
     try {
+      const typed = loginValue.trim()
+      const isEmail = typed.includes('@')
       const result = await authLoginPassenger({
-        telefone: telefone.trim(),
+        ...(isEmail ? { email: typed.toLowerCase() } : { telefone: typed }),
         senha,
       })
       if (result?.token) {
@@ -68,12 +70,16 @@ function PassengerLoginPage() {
       <div className="container">
         <div className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <h1 className="text-2xl font-black text-slate-900">Login do Passageiro</h1>
-          <p className="mt-2 text-sm text-slate-600">Entre com telefone e senha para acessar seus motoristas.</p>
+          <p className="mt-2 text-sm text-slate-600">Entre com telefone ou e-mail e senha para acessar seus motoristas.</p>
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-              <span>Telefone</span>
-              <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+              <span>Telefone ou e-mail</span>
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                value={loginValue}
+                onChange={(e) => setLoginValue(e.target.value)}
+              />
             </label>
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
               <span>Senha</span>

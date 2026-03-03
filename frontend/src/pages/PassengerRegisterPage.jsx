@@ -87,8 +87,7 @@ function PassengerRegisterPage() {
         phone: form.telefone.trim(),
       })
       const masked = result?.phoneMasked || 'seu numero'
-      const demoSuffix = result?.demoCode ? ` (demo: ${result.demoCode})` : ''
-      setCodeMessage(`Codigo enviado para ${masked}.${demoSuffix}`)
+      setCodeMessage(`Codigo enviado para ${masked}.`)
     } catch (err) {
       setError(err.message || 'Nao foi possivel enviar o codigo.')
     } finally {
