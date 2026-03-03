@@ -51,7 +51,7 @@ function PassengerRegisterPage() {
         localStorage.setItem(PASSENGER_STORAGE_KEY, JSON.stringify(result.passenger))
       }
       sessionStorage.setItem('Aplayplay_passenger_notice', 'Cadastro concluido e motorista vinculado.')
-      navigate('/passageiro/motoristas', { replace: true })
+      navigate(`/passageiro/solicitar/${encodeURIComponent(motoristaId)}`, { replace: true })
     } catch (err) {
       setError(err.message || 'Nao foi possivel concluir cadastro.')
     } finally {

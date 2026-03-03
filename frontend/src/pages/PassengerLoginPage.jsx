@@ -44,7 +44,18 @@ function PassengerLoginPage() {
         }
       }
 
-      navigate('/passageiro/motoristas', { replace: true })
+      if (motoristaId) {
+        navigate(`/passageiro/solicitar/${encodeURIComponent(motoristaId)}`, { replace: true })
+        return
+      }
+
+      const linkedDriver = String(result?.passenger?.driverSlug || '').trim()
+      if (linkedDriver) {
+        navigate(`/solicitar/${encodeURIComponent(linkedDriver)}`, { replace: true })
+        return
+      }
+
+      navigate('/passageiro/solicitar', { replace: true })
     } catch (err) {
       setError(err.message || 'Falha no login do passageiro.')
     } finally {

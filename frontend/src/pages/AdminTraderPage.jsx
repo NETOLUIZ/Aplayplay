@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import {
   deleteAdminPassenger,
+  deleteAdminDriver,
   getAdminDrivers,
   getAdminPassengers,
   isApiEnabled,
@@ -324,6 +325,87 @@ function AdminTraderPage() {
     }
   }
 
+  async function removeDriver(driver) {
+    const targetId = String(driver?.id || '').trim()
+    if (!targetId) {
+      setAdminNotice('Motorista sem identificador valido para exclusao.')
+      return
+    }
+
+    const confirmRemove = window.confirm(`Deseja excluir o motorista ${driver?.fullName || ''}?`)
+    if (!confirmRemove) return
+
+    if (apiEnabled) {
+      try {
+        await deleteAdminDriver(targetId)
+        setDrivers((current) => current.filter((item) => String(item.id) !== targetId))
+        setAdminNotice('Motorista excluido com sucesso.')
+        return
+      } catch (error) {
+        const message = String(error?.message || 'Nao foi possivel excluir motorista na API.')
+        if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
+          localStorage.removeItem(ADMIN_AUTH_KEY)
+          setIsAdminAuthenticated(false)
+          setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+          return
+        }
+        setAdminNotice(message)
+        return
+      }
+    }
+
+    setDrivers((current) => {
+      const next = current.filter((item) => String(item.id) !== targetId)
+      writeJson(DRIVER_LIST_KEY, next)
+      return next
+    })
+    setAdminNotice('Motorista excluido no modo local.')
+  }
+
+  async function changeDriverPassword(driver) {
+    const targetId = String(driver?.id || '').trim()
+    if (!targetId) {
+      setAdminNotice('Motorista sem identificador valido para trocar senha.')
+      return
+    }
+
+    const newPassword = window.prompt(`Nova senha para ${driver?.fullName || 'motorista'}:`)
+    if (!newPassword) return
+    if (newPassword.trim().length < 4) {
+      setAdminNotice('A senha deve ter pelo menos 4 caracteres.')
+      return
+    }
+
+    if (apiEnabled) {
+      try {
+        await patchAdminDriver(targetId, { password: newPassword.trim() })
+        setAdminNotice('Senha do motorista atualizada com sucesso.')
+        return
+      } catch (error) {
+        const message = String(error?.message || 'Nao foi possivel trocar senha do motorista na API.')
+        if (/sessao invalida|token ausente|401|credenciais/i.test(message)) {
+          localStorage.removeItem(ADMIN_AUTH_KEY)
+          setIsAdminAuthenticated(false)
+          setAdminAuthError('Sua sessao expirou. Entre novamente no admin.')
+          return
+        }
+        setAdminNotice(message)
+        return
+      }
+    }
+
+    setDrivers((current) => {
+      const next = current.map((item) => (
+        String(item.id) === targetId
+          ? { ...item, password: newPassword.trim(), updatedAt: new Date().toISOString() }
+          : item
+      ))
+      writeJson(DRIVER_LIST_KEY, next)
+      return next
+    })
+    setAdminNotice('Senha atualizada no modo local.')
+  }
+
   async function cyclePassengerStatus(passenger) {
     const order = ['active', 'pending', 'inactive']
     const currentIdx = order.indexOf(passenger.status || 'active')
@@ -586,6 +668,12 @@ function AdminTraderPage() {
                   </div>
                   <div className="adminx__tariffs-actions">
                     <button className="btn btn--primary btn--block" type="button" onClick={() => { void applyAdminTariffs(driver.id) }}>Aplicar Tarifas</button>
+                    <button className="btn btn--ghost btn--block" type="button" onClick={() => { void changeDriverPassword(driver) }}>
+                      Trocar senha
+                    </button>
+                    <button className="adminx__danger-btn" type="button" onClick={() => { void removeDriver(driver) }}>
+                      Excluir motorista
+                    </button>
                   </div>
                   {adminTariffMessage && <p className="adminx__hint">{adminTariffMessage}</p>}
                 </div>

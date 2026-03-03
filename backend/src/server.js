@@ -182,6 +182,9 @@ app.patch('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
   const patch = req.body || {}
   if (typeof patch.isActive === 'boolean') driver.isActive = patch.isActive
   if (typeof patch.tariffsEnabled === 'boolean') driver.tariffsEnabled = patch.tariffsEnabled
+  if (typeof patch.password === 'string' && patch.password.trim()) {
+    driver.password = patch.password.trim()
+  }
   if (patch.tariffs && typeof patch.tariffs === 'object') {
     driver.tariffs = {
       perKm: String(patch.tariffs.perKm || driver.tariffs?.perKm || '3,80'),
@@ -191,6 +194,17 @@ app.patch('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
   }
   driver.updatedAt = new Date().toISOString()
   res.json({ driver })
+})
+
+app.delete('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
+  const id = String(req.params.id || '')
+  const index = drivers.findIndex((item) => String(item.id) === id)
+  if (index < 0) {
+    res.status(404).json({ error: 'Motorista nao encontrado.' })
+    return
+  }
+  drivers.splice(index, 1)
+  res.json({ ok: true })
 })
 
 app.get('/api/admin/passengers', authRequired, adminRequired, (_req, res) => {

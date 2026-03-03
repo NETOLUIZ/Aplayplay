@@ -2845,8 +2845,17 @@ body {
 .adminx__tariffs-actions {
   margin-top: 0.7rem;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.6rem;
+}
+
+.adminx__danger-btn {
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  border-radius: 10px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-weight: 700;
+  padding: 0.55rem 0.7rem;
 }
 
 .adminx__hint {

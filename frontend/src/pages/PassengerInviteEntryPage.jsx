@@ -36,7 +36,7 @@ function PassengerInviteEntryPage() {
         await addPassengerDriver({ motoristaId: driverId })
         if (!cancelled) {
           sessionStorage.setItem('Aplayplay_passenger_notice', 'Motorista vinculado com sucesso.')
-          navigate('/passageiro/motoristas', { replace: true })
+          navigate(`/passageiro/solicitar/${encodeURIComponent(driverId)}`, { replace: true })
         }
       } catch {
         if (!cancelled) {

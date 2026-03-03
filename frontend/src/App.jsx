@@ -7,8 +7,6 @@ import DriverDashboardDemoPage from './pages/DriverDashboardDemoPage'
 import DriverSignupPage from './pages/DriverSignupPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
-import PassengerAddDriverPage from './pages/PassengerAddDriverPage'
-import PassengerDriversPage from './pages/PassengerDriversPage'
 import PassengerInviteEntryPage from './pages/PassengerInviteEntryPage'
 import PassengerLoginPage from './pages/PassengerLoginPage'
 import PassengerRegisterPage from './pages/PassengerRegisterPage'
@@ -18,11 +16,9 @@ function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/home" element={<LandingPage />} />
-        <Route path="/passageiro" element={<Navigate to="/passageiro/motoristas" replace />} />
+        <Route path="/passageiro" element={<Navigate to="/login" replace />} />
         <Route path="/passageiro/solicitar" element={<BookingRequestDemoPage />} />
         <Route path="/passageiro/solicitar/:motoristaId" element={<BookingRequestDemoPage />} />
-        <Route path="/passageiro/motoristas" element={<PassengerDriversPage />} />
-        <Route path="/passageiro/add-motorista" element={<PassengerAddDriverPage />} />
         <Route path="/motorista" element={<Navigate to="/motorista/login" replace />} />
         <Route path="/motorista/login" element={<LoginPage />} />
         <Route path="/motorista/cadastro" element={<DriverSignupPage />} />

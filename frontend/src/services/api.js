@@ -171,6 +171,13 @@ export async function patchAdminDriver(id, patch) {
   })
 }
 
+export async function deleteAdminDriver(id) {
+  return request(`/api/admin/drivers/${id}`, {
+    method: 'DELETE',
+    auth: true,
+  })
+}
+
 export async function getAdminPassengers() {
   return request('/api/admin/passengers', { method: 'GET', auth: true })
 }
