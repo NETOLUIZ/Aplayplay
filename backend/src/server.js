@@ -19,6 +19,13 @@ const passengers = []
 const passengerDriverLinks = []
 const rides = []
 const chatsByRide = new Map()
+const verificationCodes = new Map()
+
+const VERIFICATION_CODE_TTL_MS = Number(process.env.VERIFICATION_CODE_TTL_MS || 10 * 60 * 1000)
+const WHATSAPP_PROVIDER = String(process.env.WHATSAPP_PROVIDER || 'demo').trim().toLowerCase()
+const TWILIO_ACCOUNT_SID = String(process.env.TWILIO_ACCOUNT_SID || '').trim()
+const TWILIO_AUTH_TOKEN = String(process.env.TWILIO_AUTH_TOKEN || '').trim()
+const TWILIO_WHATSAPP_FROM = String(process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886').trim()
 
 app.use(cors({
   origin(origin, callback) {
@@ -50,6 +57,87 @@ function normalizePhone(value) {
 
 function createToken() {
   return crypto.randomBytes(24).toString('hex')
+}
+
+function createVerificationCode() {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+function maskPhone(phone) {
+  const digits = normalizePhone(phone)
+  if (digits.length < 4) return digits
+  return `${digits.slice(0, 2)}*****${digits.slice(-2)}`
+}
+
+function verificationKey(role, phone) {
+  return `${String(role || '').trim().toLowerCase()}:${normalizePhone(phone)}`
+}
+
+function consumeVerificationCode(role, phone, code) {
+  const normalizedRole = String(role || '').trim().toLowerCase()
+  const normalizedPhone = normalizePhone(phone)
+  const normalizedCode = String(code || '').trim()
+  const key = verificationKey(normalizedRole, normalizedPhone)
+  const entry = verificationCodes.get(key)
+  if (!entry) {
+    return { ok: false, reason: 'not_found' }
+  }
+  if (Date.now() > Number(entry.expiresAt || 0)) {
+    verificationCodes.delete(key)
+    return { ok: false, reason: 'expired' }
+  }
+  if (String(entry.code || '') !== normalizedCode) {
+    return { ok: false, reason: 'invalid' }
+  }
+  verificationCodes.delete(key)
+  return { ok: true }
+}
+
+function verificationErrorMessage(reason) {
+  if (reason === 'expired') return 'Codigo expirado. Solicite um novo codigo no WhatsApp.'
+  if (reason === 'invalid') return 'Codigo de verificacao invalido.'
+  return 'Solicite o codigo de verificacao antes de concluir o cadastro.'
+}
+
+async function sendVerificationCodeByTwilio({ phone, code, role }) {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_FROM) {
+    throw new Error('Twilio WhatsApp nao configurado no ambiente.')
+  }
+
+  const to = `whatsapp:+55${normalizePhone(phone)}`
+  const body = [
+    'Aplayplay - Codigo de verificacao',
+    `Codigo: ${code}`,
+    `Perfil: ${role === 'driver' ? 'Motorista' : 'Passageiro'}`,
+    `Validade: ${Math.floor(VERIFICATION_CODE_TTL_MS / 60000)} min`,
+    'Nao compartilhe este codigo.',
+  ].join('\n')
+
+  const payload = new URLSearchParams()
+  payload.set('From', TWILIO_WHATSAPP_FROM)
+  payload.set('To', to)
+  payload.set('Body', body)
+
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: payload.toString(),
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(text || 'Falha ao enviar codigo no WhatsApp via Twilio.')
+  }
+
+  const result = await response.json()
+  return {
+    sid: result?.sid || null,
+    status: result?.status || null,
+  }
 }
 
 function authRequired(req, res, next) {
@@ -139,6 +227,62 @@ app.get('/api/health', (_req, res) => {
     now: new Date().toISOString(),
     version: '1.0.0',
   })
+})
+
+app.post('/api/verification/send', (req, res) => {
+  const role = String(req.body?.role || '').trim().toLowerCase()
+  const phone = normalizePhone(req.body?.phone)
+
+  if (!['driver', 'passenger'].includes(role)) {
+    res.status(400).json({ error: 'Tipo de verificacao invalido.' })
+    return
+  }
+  if (!phone || phone.length < 10) {
+    res.status(400).json({ error: 'Informe um WhatsApp valido para receber o codigo.' })
+    return
+  }
+
+  const code = createVerificationCode()
+  const key = verificationKey(role, phone)
+  const expiresAt = Date.now() + VERIFICATION_CODE_TTL_MS
+  verificationCodes.set(key, {
+    role,
+    phone,
+    code,
+    sentAt: new Date().toISOString(),
+    expiresAt,
+  })
+
+  const respond = (providerMeta = null) => {
+    res.json({
+      ok: true,
+      channel: 'whatsapp',
+      provider: WHATSAPP_PROVIDER,
+      phoneMasked: maskPhone(phone),
+      expiresInSeconds: Math.floor(VERIFICATION_CODE_TTL_MS / 1000),
+      demoCode: WHATSAPP_PROVIDER === 'demo' ? code : undefined,
+      providerMeta,
+      message: 'Codigo enviado para seu WhatsApp.',
+    })
+  }
+
+  if (WHATSAPP_PROVIDER === 'demo') {
+    console.log(`[verification-demo] role=${role} phone=${phone} code=${code}`)
+    respond()
+    return
+  }
+
+  if (WHATSAPP_PROVIDER === 'twilio') {
+    sendVerificationCodeByTwilio({ phone, code, role })
+      .then((providerMeta) => respond(providerMeta))
+      .catch((error) => {
+        console.error(error)
+        res.status(500).json({ error: 'Falha ao enviar codigo via WhatsApp. Verifique configuracao do Twilio.' })
+      })
+    return
+  }
+
+  res.status(400).json({ error: 'Provedor de WhatsApp invalido. Use "demo" ou "twilio".' })
 })
 
 app.post('/api/auth/admin/login', (req, res) => {
@@ -249,6 +393,7 @@ app.post('/api/drivers/signup', (req, res) => {
   const vehiclePlate = String(req.body?.vehiclePlate || '').trim().toUpperCase()
   const vehicleCategory = String(req.body?.vehicleCategory || 'Particular').trim()
   const city = String(req.body?.city || 'Fortaleza, CE').trim()
+  const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!fullName || !email || !phone || !vehicleModel || !vehicleYear || !vehiclePlate) {
     res.status(400).json({ error: 'Campos obrigatorios faltando no cadastro do motorista.' })
@@ -256,6 +401,11 @@ app.post('/api/drivers/signup', (req, res) => {
   }
   if (drivers.some((driver) => driver.email === email)) {
     res.status(409).json({ error: 'Ja existe motorista com esse e-mail.' })
+    return
+  }
+  const verificationResult = consumeVerificationCode('driver', phone, verificationCode)
+  if (!verificationResult.ok) {
+    res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
     return
   }
 
@@ -273,6 +423,7 @@ app.post('/api/drivers/signup', (req, res) => {
     isActive: true,
     tariffsEnabled: true,
     tariffs: { perKm: '3,80', perMinute: '0,55', displacementFee: '5,00' },
+    phoneVerifiedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   }
 
@@ -326,6 +477,7 @@ app.post('/api/passengers/signup', (req, res) => {
   const phone = normalizePhone(req.body?.phone)
   const address = String(req.body?.address || '').trim()
   const driverSlug = String(req.body?.driverSlug || '').trim().toLowerCase()
+  const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!driverSlug) {
     res.status(400).json({ error: 'Cadastro de passageiro permitido apenas via link/QR do motorista.' })
@@ -349,6 +501,11 @@ app.post('/api/passengers/signup', (req, res) => {
     res.status(404).json({ error: 'Motorista do QR/link nao encontrado.' })
     return
   }
+  const verificationResult = consumeVerificationCode('passenger', phone, verificationCode)
+  if (!verificationResult.ok) {
+    res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
+    return
+  }
 
   const created = {
     id: `PS-${Date.now()}`,
@@ -358,6 +515,7 @@ app.post('/api/passengers/signup', (req, res) => {
     phone,
     address,
     status: 'active',
+    phoneVerifiedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     driverSlug: driver.slug,
   }
@@ -412,6 +570,7 @@ app.post('/api/auth/register', (req, res) => {
     || '',
   ).trim().toLowerCase()
   const email = String(req.body?.email || `${String(phone).replace(/\D/g, '')}@passageiro.local`).trim().toLowerCase()
+  const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim()
 
   if (!driverIdentifier) {
     res.status(400).json({ error: 'Primeiro cadastro do passageiro deve ser pelo QR/link do motorista.' })
@@ -421,7 +580,6 @@ app.post('/api/auth/register', (req, res) => {
     res.status(400).json({ error: 'Informe nome, telefone e senha para cadastrar.' })
     return
   }
-
   let passenger = passengers.find((item) => String(item.phone || '').trim() === phone)
   if (!passenger) {
     passenger = {
@@ -432,6 +590,7 @@ app.post('/api/auth/register', (req, res) => {
       phone,
       address,
       status: 'active',
+      phoneVerifiedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       driverSlug: '',
     }
@@ -441,6 +600,11 @@ app.post('/api/auth/register', (req, res) => {
   const driver = findDriverByIdentifier(driverIdentifier)
   if (!driver) {
     res.status(404).json({ error: 'Motorista do link nao encontrado.' })
+    return
+  }
+  const verificationResult = consumeVerificationCode('passenger', phone, verificationCode)
+  if (!verificationResult.ok) {
+    res.status(400).json({ error: verificationErrorMessage(verificationResult.reason) })
     return
   }
   linkPassengerToDriver(passenger.id, driver.id)

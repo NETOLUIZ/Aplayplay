@@ -47,6 +47,7 @@ function upsertDriverInList(driver) {
 
 function DriverAccountProvider({ children }) {
   const [driverAccount, setDriverAccount] = useState(null)
+  const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
     try {
@@ -56,6 +57,8 @@ function DriverAccountProvider({ children }) {
       }
     } catch {
       setDriverAccount(null)
+    } finally {
+      setIsHydrated(true)
     }
   }, [])
 
@@ -132,7 +135,14 @@ function DriverAccountProvider({ children }) {
 
   return (
     <DriverAccountContext.Provider
-      value={{ driverAccount, registerDriver, loginDriver, updateDriverAccount, clearDriverAccount }}
+      value={{
+        driverAccount,
+        isHydrated,
+        registerDriver,
+        loginDriver,
+        updateDriverAccount,
+        clearDriverAccount,
+      }}
     >
       {children}
     </DriverAccountContext.Provider>

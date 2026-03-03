@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { registerPassenger } from '../services/api'
+import { isApiEnabled, registerPassenger, sendWhatsAppVerificationCode } from '../services/api'
 
 const PASSENGER_STORAGE_KEY = 'Aplayplay_passenger_account'
 const PASSENGER_TOKEN_KEY = 'Aplayplay_passenger_token'
@@ -17,6 +17,10 @@ function PassengerRegisterPage() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [codeMessage, setCodeMessage] = useState('')
+  const [sendingCode, setSendingCode] = useState(false)
+  const apiEnabled = isApiEnabled()
 
   function onChange(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -34,6 +38,10 @@ function PassengerRegisterPage() {
       setError('Informe nome, telefone e senha.')
       return
     }
+    if (apiEnabled && !verificationCode.trim()) {
+      setError('Informe o codigo enviado no WhatsApp para concluir o cadastro.')
+      return
+    }
 
     setLoading(true)
     try {
@@ -43,6 +51,7 @@ function PassengerRegisterPage() {
         senha: form.senha,
         address: form.address.trim(),
         motoristaId,
+        verificationCode: verificationCode.trim(),
       })
       if (result?.token) {
         localStorage.setItem(PASSENGER_TOKEN_KEY, result.token)
@@ -56,6 +65,34 @@ function PassengerRegisterPage() {
       setError(err.message || 'Nao foi possivel concluir cadastro.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function onSendCode() {
+    setError('')
+    setCodeMessage('')
+    if (!apiEnabled) {
+      setError('Configure a API para envio de codigo no WhatsApp.')
+      return
+    }
+    if (!form.telefone.trim()) {
+      setError('Informe o telefone antes de enviar o codigo.')
+      return
+    }
+
+    setSendingCode(true)
+    try {
+      const result = await sendWhatsAppVerificationCode({
+        role: 'passenger',
+        phone: form.telefone.trim(),
+      })
+      const masked = result?.phoneMasked || 'seu numero'
+      const demoSuffix = result?.demoCode ? ` (demo: ${result.demoCode})` : ''
+      setCodeMessage(`Codigo enviado para ${masked}.${demoSuffix}`)
+    } catch (err) {
+      setError(err.message || 'Nao foi possivel enviar o codigo.')
+    } finally {
+      setSendingCode(false)
     }
   }
 
@@ -79,6 +116,21 @@ function PassengerRegisterPage() {
               <span>Senha</span>
               <input type="password" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" value={form.senha} onChange={(e) => onChange('senha', e.target.value)} />
             </label>
+            <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <span className="text-sm font-semibold text-slate-700">Verificacao por WhatsApp</span>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                  placeholder="Codigo de 6 digitos"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(String(e.target.value || '').replace(/\D/g, '').slice(0, 6))}
+                />
+                <button className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-700" type="button" onClick={onSendCode} disabled={sendingCode}>
+                  {sendingCode ? 'Enviando...' : 'Enviar codigo'}
+                </button>
+              </div>
+              {codeMessage && <p className="text-xs font-semibold text-emerald-600">{codeMessage}</p>}
+            </div>
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
               <span>Endereco (opcional)</span>
               <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" value={form.address} onChange={(e) => onChange('address', e.target.value)} />

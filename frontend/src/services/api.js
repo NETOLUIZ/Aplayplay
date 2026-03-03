@@ -60,6 +60,13 @@ export async function signupDriver(payload) {
   })
 }
 
+export async function sendWhatsAppVerificationCode(payload) {
+  return request('/api/verification/send', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function loginDriver(payload) {
   return request('/api/drivers/login', {
     method: 'POST',

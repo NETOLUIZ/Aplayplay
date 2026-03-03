@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDriverAccount } from '../context/DriverAccountContext'
+import { isApiEnabled, sendWhatsAppVerificationCode } from '../services/api'
 
 const initialForm = {
   fullName: '',
@@ -33,6 +34,10 @@ function DriverSignupPage() {
   const { registerDriver } = useDriverAccount()
   const [form, setForm] = useState(initialForm)
   const [error, setError] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [verificationMessage, setVerificationMessage] = useState('')
+  const apiEnabled = isApiEnabled()
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -71,12 +76,44 @@ function DriverSignupPage() {
       setError('Preencha todos os campos obrigatorios para continuar.')
       return
     }
+    if (apiEnabled && !verificationCode.trim()) {
+      setError('Informe o codigo enviado no WhatsApp para liberar o cadastro.')
+      return
+    }
 
     try {
-      await registerDriver(form)
+      await registerDriver({ ...form, verificationCode: verificationCode.trim() })
       navigate('/app/motorista/dashboard')
     } catch (err) {
       setError(err.message || 'Nao foi possivel cadastrar motorista.')
+    }
+  }
+
+  async function handleSendVerificationCode() {
+    setError('')
+    setVerificationMessage('')
+    if (!apiEnabled) {
+      setError('Configure a API para enviar codigo por WhatsApp.')
+      return
+    }
+    if (!form.phone.trim()) {
+      setError('Informe o WhatsApp do motorista antes de enviar o codigo.')
+      return
+    }
+
+    setIsSendingCode(true)
+    try {
+      const result = await sendWhatsAppVerificationCode({
+        role: 'driver',
+        phone: form.phone,
+      })
+      const masked = result?.phoneMasked || 'seu numero'
+      const demoSuffix = result?.demoCode ? ` (demo: ${result.demoCode})` : ''
+      setVerificationMessage(`Codigo enviado para ${masked}.${demoSuffix}`)
+    } catch (err) {
+      setError(err.message || 'Nao foi possivel enviar o codigo agora.')
+    } finally {
+      setIsSendingCode(false)
     }
   }
 
@@ -180,6 +217,27 @@ function DriverSignupPage() {
                         onChange={(e) => updateField('phone', maskBrazilPhone(e.target.value))}
                       />
                     </label>
+                  </div>
+
+                  <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Verificacao por WhatsApp</p>
+                    <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                      <input
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-yellow-400"
+                        placeholder="Codigo de 6 digitos"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(String(e.target.value || '').replace(/\D/g, '').slice(0, 6))}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:border-yellow-400 hover:bg-yellow-50 disabled:opacity-60"
+                        onClick={handleSendVerificationCode}
+                        disabled={isSendingCode}
+                      >
+                        {isSendingCode ? 'Enviando...' : 'Enviar codigo'}
+                      </button>
+                    </div>
+                    {verificationMessage && <p className="text-xs font-semibold text-emerald-600">{verificationMessage}</p>}
                   </div>
 
                   <label className="grid gap-1.5 text-sm font-semibold text-slate-700">

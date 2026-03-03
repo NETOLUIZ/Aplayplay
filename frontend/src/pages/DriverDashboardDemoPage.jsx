@@ -149,7 +149,7 @@ function rideStatusLabel(status) {
 }
 
 function DriverDashboardDemoPage({ requireRegistration = false }) {
-  const { driverAccount, updateDriverAccount } = useDriverAccount()
+  const { driverAccount, isHydrated, updateDriverAccount } = useDriverAccount()
   const [isOnline, setIsOnline] = useState(true)
   const [rides, setRides] = useState([])
   const [tariffs, setTariffs] = useState(initialTariffs)
@@ -168,6 +168,10 @@ function DriverDashboardDemoPage({ requireRegistration = false }) {
   const [supportDraft, setSupportDraft] = useState('')
   const [copyMessage, setCopyMessage] = useState('')
   const apiEnabled = isApiEnabled()
+
+  if (requireRegistration && !isHydrated) {
+    return null
+  }
 
   if (requireRegistration && !driverAccount) {
     return <Navigate to="/cadastro/motorista" replace />
