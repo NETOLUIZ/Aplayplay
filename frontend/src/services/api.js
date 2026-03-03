@@ -178,7 +178,8 @@ export async function getAdminDrivers() {
 }
 
 export async function patchAdminDriver(id, patch) {
-  return request(`/api/admin/drivers/${id}`, {
+  const encoded = encodeURIComponent(String(id || '').trim())
+  return request(`/api/admin/drivers/${encoded}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
     auth: true,
@@ -186,7 +187,8 @@ export async function patchAdminDriver(id, patch) {
 }
 
 export async function deleteAdminDriver(id) {
-  return request(`/api/admin/drivers/${id}`, {
+  const encoded = encodeURIComponent(String(id || '').trim())
+  return request(`/api/admin/drivers/${encoded}`, {
     method: 'DELETE',
     auth: true,
   })

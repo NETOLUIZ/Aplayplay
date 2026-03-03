@@ -205,6 +205,7 @@ function findDriverByIdentifier(identifier) {
   return drivers.find((item) => (
     String(item.id || '').trim().toLowerCase() === value
     || String(item.slug || '').trim().toLowerCase() === value
+    || String(item.email || '').trim().toLowerCase() === value
   )) || null
 }
 
@@ -331,8 +332,8 @@ app.get('/api/admin/drivers', authRequired, adminRequired, (_req, res) => {
 })
 
 app.patch('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
-  const id = String(req.params.id || '')
-  const driver = drivers.find((item) => String(item.id) === id)
+  const id = decodeURIComponent(String(req.params.id || ''))
+  const driver = findDriverByIdentifier(id)
   if (!driver) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
@@ -356,8 +357,9 @@ app.patch('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
 })
 
 app.delete('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
-  const id = String(req.params.id || '')
-  const index = drivers.findIndex((item) => String(item.id) === id)
+  const id = decodeURIComponent(String(req.params.id || ''))
+  const driver = findDriverByIdentifier(id)
+  const index = driver ? drivers.findIndex((item) => item === driver) : -1
   if (index < 0) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
@@ -819,9 +821,12 @@ app.post('/api/rides', (req, res) => {
     destination: String(req.body?.destination || ''),
     pickupDistance: String(req.body?.pickupDistance || ''),
     destinationTime: String(req.body?.destinationTime || ''),
+    distanceKm: Number(req.body?.distanceKm || 0),
+    durationMin: Number(req.body?.durationMin || 0),
     tripDate: String(req.body?.tripDate || ''),
     tripTime: String(req.body?.tripTime || ''),
     estimatedFare: Number(req.body?.estimatedFare || 0),
+    estimatedPrice: String(req.body?.estimatedPrice || ''),
     status: 'pending',
     createdAt: new Date().toISOString(),
   }

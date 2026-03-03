@@ -684,6 +684,8 @@ function BookingRequestDemoPage() {
   const fallbackRoutePositions = [passengerPoint, driverPoint, destinationPoint]
   const tariffs = useMemo(() => readTariffsFromDriverProfile(driverProfile), [driverProfile])
   const isDriverActive = driverProfile?.isActive !== false
+  const hasDestinationInput = destination.trim().length > 0
+  const canEstimateRide = hasDriverLink && isDriverActive && hasDestinationInput
   const routeCandidates = useMemo(
     () => tripRoutes.map((route, index) => {
       const traffic = buildRouteTraffic(route.points, route.distanceKm, route.baseDurationMin, trafficTick)
@@ -708,12 +710,12 @@ function BookingRequestDemoPage() {
     [pickupRoute, driverPoint, passengerPoint],
   )
   const tripDistanceKm = useMemo(
-    () => selectedTripRoute?.distanceKm ?? toRoadDistanceKm(passengerPoint, destinationPoint, ROAD_FACTOR_TRIP),
-    [selectedTripRoute, passengerPoint, destinationPoint],
+    () => (canEstimateRide ? (selectedTripRoute?.distanceKm ?? toRoadDistanceKm(passengerPoint, destinationPoint, ROAD_FACTOR_TRIP)) : 0),
+    [canEstimateRide, selectedTripRoute, passengerPoint, destinationPoint],
   )
-  const estimatedDurationMin = Math.max(6, Math.round(
-    selectedTripRoute?.adjustedDurationMin ?? ((tripDistanceKm / 26) * 60),
-  ))
+  const estimatedDurationMin = canEstimateRide
+    ? Math.max(6, Math.round(selectedTripRoute?.adjustedDurationMin ?? ((tripDistanceKm / 26) * 60)))
+    : 0
   const liveTrafficState = useMemo(() => {
     const states = selectedTripRoute?.trafficStates
     if (!states) return 'livre'
@@ -723,12 +725,12 @@ function BookingRequestDemoPage() {
     return 'livre'
   }, [selectedTripRoute])
   const estimatedFare = useMemo(
-    () => (hasDriverLink && isDriverActive ? (
+    () => (canEstimateRide ? (
       tariffs.displacementFee
       + tripDistanceKm * tariffs.perKm
       + estimatedDurationMin * tariffs.perMinute
     ) : 0),
-    [hasDriverLink, isDriverActive, tariffs, tripDistanceKm, estimatedDurationMin],
+    [canEstimateRide, tariffs, tripDistanceKm, estimatedDurationMin],
   )
   const estimatedFareLabel = formatCurrencyBRL(estimatedFare)
 
@@ -877,6 +879,15 @@ function BookingRequestDemoPage() {
     let cancelled = false
 
     async function loadSmartRoutes() {
+      if (!hasDestinationInput) {
+        setTripRoutes([])
+        setPickupRoute(null)
+        setSelectedTripIndex(0)
+        setRoutingFeedback('')
+        setRoutingError('')
+        setIsRouting(false)
+        return
+      }
       setIsRouting(true)
       setRoutingError('')
       try {
@@ -934,7 +945,7 @@ function BookingRequestDemoPage() {
     return () => {
       cancelled = true
     }
-  }, [driverPoint, passengerPoint, destinationPoint])
+  }, [driverPoint, passengerPoint, destinationPoint, hasDestinationInput])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1410,6 +1421,7 @@ function BookingRequestDemoPage() {
       destinationTime: tripTime ? `Agendada ${tripTime}` : `${estimatedDurationMin} min`,
       distanceKm: Number(tripDistanceKm.toFixed(2)),
       durationMin: estimatedDurationMin,
+      estimatedFare: Number(estimatedFare.toFixed(2)),
       estimatedPrice: estimatedFareLabel,
       tripDate: tripDate || null,
       tripTime: tripTime || null,
@@ -1577,10 +1589,12 @@ function BookingRequestDemoPage() {
               <Marker position={passengerPoint} icon={passengerPinIcon}>
                 <Popup>Minha localizacao: ponto de embarque</Popup>
               </Marker>
-              <Marker position={destinationPoint} icon={destinationFlagIcon}>
-                <Popup>Destino final: {destination || 'Nao informado'}</Popup>
-              </Marker>
-              {routeCandidates.length > 0 && routeCandidates
+              {hasDestinationInput && (
+                <Marker position={destinationPoint} icon={destinationFlagIcon}>
+                  <Popup>Destino final: {destination || 'Nao informado'}</Popup>
+                </Marker>
+              )}
+              {hasDestinationInput && routeCandidates.length > 0 && routeCandidates
                 .filter((route) => route.index !== selectedTripRoute?.index)
                 .map((route) => (
                   <Polyline
@@ -1609,7 +1623,7 @@ function BookingRequestDemoPage() {
                   }}
                 />
               )}
-              {selectedTripRoute?.trafficSegments?.length > 0 && selectedTripRoute.trafficSegments.map((segment, index) => (
+              {hasDestinationInput && selectedTripRoute?.trafficSegments?.length > 0 && selectedTripRoute.trafficSegments.map((segment, index) => (
                 <Polyline
                   key={`seg-${selectedTripRoute.index}-${index}`}
                   positions={[segment.from, segment.to]}
@@ -1622,7 +1636,7 @@ function BookingRequestDemoPage() {
                   }}
                 />
               ))}
-              {!selectedTripRoute && (
+              {hasDestinationInput && !selectedTripRoute && (
                 <>
                   <Polyline
                     positions={fallbackRoutePositions}
@@ -1665,12 +1679,12 @@ function BookingRequestDemoPage() {
 
             {!activeRideId && !isRideLayout && (
               <div className="booking-stage__fare-tag">
-                <strong>{estimatedFareLabel}</strong>
-                <small>{tripDistanceKm.toFixed(1)} km • {estimatedDurationMin} min</small>
+                <strong>{hasDestinationInput ? estimatedFareLabel : 'Informe o destino'}</strong>
+                <small>{hasDestinationInput ? `${tripDistanceKm.toFixed(1)} km • ${estimatedDurationMin} min` : 'Para calcular valor e tempo da corrida'}</small>
               </div>
             )}
 
-            {!isRideLayout && (
+            {!isRideLayout && hasDestinationInput && (
               <div className={`booking-stage__traffic booking-stage__traffic--${liveTrafficState}`}>
                 <strong>Transito: {liveTrafficState}</strong>
                 <small>{isRouting ? 'Atualizando rotas...' : 'Atualizacao continua ativa'}</small>
@@ -2010,10 +2024,10 @@ function BookingRequestDemoPage() {
 
                 <div className="booking-card__fare-preview">
                   <small>Estimativa da corrida</small>
-                  <strong>{estimatedFareLabel}</strong>
-                  <span>{tripDistanceKm.toFixed(1)} km de trajeto • {estimatedDurationMin} min</span>
+                  <strong>{hasDestinationInput ? estimatedFareLabel : '--'}</strong>
+                  <span>{hasDestinationInput ? `${tripDistanceKm.toFixed(1)} km de trajeto • ${estimatedDurationMin} min` : 'Preencha o destino para calcular a estimativa.'}</span>
                   <span>Motorista ate voce: {pickupDistanceKm.toFixed(1)} km</span>
-                  {routeCandidates.length > 0 && (
+                  {hasDestinationInput && routeCandidates.length > 0 && (
                     <div className="booking-smart-routes" role="tablist" aria-label="Rotas alternativas">
                       {routeCandidates.slice(0, 3).map((route, idx) => (
                         <button
@@ -2059,7 +2073,7 @@ function BookingRequestDemoPage() {
                 </div>
 
                 <button className="booking-card__submit" type="button" onClick={handleRequestRide}>
-                  <span>{isPassengerLoggedIn ? (hasDriverLink ? `Solicitar Corrida (${estimatedFareLabel})` : 'Vincule com QR para Solicitar') : 'Cadastro/Login para Solicitar'}</span>
+                  <span>{isPassengerLoggedIn ? (hasDriverLink ? (hasDestinationInput ? `Solicitar Corrida (${estimatedFareLabel})` : 'Informe destino para solicitar') : 'Vincule com QR para Solicitar') : 'Cadastro/Login para Solicitar'}</span>
                   <span>{'>'}</span>
                 </button>
 

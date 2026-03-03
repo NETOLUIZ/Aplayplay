@@ -62,6 +62,20 @@ function mergeDrivers(apiDrivers, localDrivers) {
   return Array.from(byKey.values())
 }
 
+function getDriverIdentifier(driver) {
+  return String(driver?.id || driver?.email || driver?.slug || '').trim()
+}
+
+function matchesDriverIdentifier(driver, identifier) {
+  const target = String(identifier || '').trim().toLowerCase()
+  if (!target) return false
+  return (
+    String(driver?.id || '').trim().toLowerCase() === target
+    || String(driver?.email || '').trim().toLowerCase() === target
+    || String(driver?.slug || '').trim().toLowerCase() === target
+  )
+}
+
 function AdminTraderPage() {
   const navigate = useNavigate()
   const apiEnabled = isApiEnabled()
@@ -236,7 +250,7 @@ function AdminTraderPage() {
   }
 
   async function removeDriver(driver) {
-    const targetId = String(driver?.id || '').trim()
+    const targetId = getDriverIdentifier(driver)
     if (!targetId) {
       setAdminNotice('Motorista sem identificador valido para exclusao.')
       return
@@ -248,7 +262,7 @@ function AdminTraderPage() {
     if (apiEnabled) {
       try {
         await deleteAdminDriver(targetId)
-        setDrivers((current) => current.filter((item) => String(item.id) !== targetId))
+        setDrivers((current) => current.filter((item) => !matchesDriverIdentifier(item, targetId)))
         setAdminNotice('Motorista excluido com sucesso.')
         return
       } catch (error) {
@@ -265,7 +279,7 @@ function AdminTraderPage() {
     }
 
     setDrivers((current) => {
-      const next = current.filter((item) => String(item.id) !== targetId)
+      const next = current.filter((item) => !matchesDriverIdentifier(item, targetId))
       writeJson(DRIVER_LIST_KEY, next)
       return next
     })
