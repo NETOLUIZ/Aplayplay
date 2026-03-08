@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import crypto from 'crypto'
+import { Pool } from 'pg'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -13,19 +14,100 @@ const allowedOrigins = String(process.env.CORS_ORIGIN || '')
   .map((item) => item.trim())
   .filter(Boolean)
 
-const sessions = new Map()
-const drivers = []
-const passengers = []
-const passengerDriverLinks = []
-const rides = []
-const chatsByRide = new Map()
-const verificationCodes = new Map()
-
 const VERIFICATION_CODE_TTL_MS = Number(process.env.VERIFICATION_CODE_TTL_MS || 10 * 60 * 1000)
 const WHATSAPP_PROVIDER = String(process.env.WHATSAPP_PROVIDER || 'demo').trim().toLowerCase()
 const TWILIO_ACCOUNT_SID = String(process.env.TWILIO_ACCOUNT_SID || '').trim()
 const TWILIO_AUTH_TOKEN = String(process.env.TWILIO_AUTH_TOKEN || '').trim()
 const TWILIO_WHATSAPP_FROM = String(process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886').trim()
+
+const sessions = new Map()
+const verificationCodes = new Map()
+const chatsByRide = new Map()
+
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL ausente. Configure o Postgres antes de iniciar.')
+  process.exit(1)
+}
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+})
+
+const ensureSchemaSQL = `
+  create table if not exists drivers (
+    id text primary key,
+    full_name text not null,
+    email text unique not null,
+    phone text,
+    city text,
+    vehicle_model text,
+    vehicle_year text,
+    vehicle_plate text,
+    vehicle_category text,
+    slug text unique,
+    is_active boolean default true,
+    tariffs_enabled boolean default true,
+    tariffs jsonb default '{"perKm":"3,80","perMinute":"0,55","displacementFee":"5,00"}',
+    password text,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+  );
+
+  create table if not exists passengers (
+    id text primary key,
+    full_name text not null,
+    email text unique not null,
+    password text not null,
+    phone text unique,
+    address text,
+    status text default 'active',
+    driver_slug text,
+    phone_verified_at timestamptz,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+  );
+
+  create table if not exists passenger_driver_links (
+    id text primary key,
+    passenger_id text references passengers(id) on delete cascade,
+    driver_id text references drivers(id) on delete cascade,
+    created_at timestamptz default now(),
+    unique(passenger_id, driver_id)
+  );
+
+  create table if not exists rides (
+    id text primary key,
+    passenger_email text,
+    passenger_name text,
+    driver_id text references drivers(id),
+    driver_slug text,
+    origin text,
+    destination text,
+    pickup_distance text,
+    destination_time text,
+    distance_km numeric,
+    duration_min numeric,
+    trip_date text,
+    trip_time text,
+    estimated_fare numeric,
+    estimated_price text,
+    status text default 'pending',
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+  );
+
+  create index if not exists idx_drivers_slug on drivers(slug);
+  create index if not exists idx_passengers_driver_slug on passengers(driver_slug);
+  create index if not exists idx_rides_driver on rides(driver_id);
+`
+
+await pool.query(ensureSchemaSQL).then(() => {
+  console.log('Database schema ready')
+}).catch((error) => {
+  console.error('Failed to init database', error)
+  process.exit(1)
+})
 
 app.use(cors({
   origin(origin, callback) {
@@ -42,6 +124,10 @@ app.use(cors({
 }))
 app.use(express.json())
 
+function asyncHandler(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
+}
+
 function slugify(text) {
   return String(text || '')
     .toLowerCase()
@@ -53,20 +139,15 @@ function slugify(text) {
 
 function normalizePhone(value) {
   let digits = String(value || '').replace(/\D/g, '')
-
-  // Normaliza numeros BR com DDI +55 para comparar cadastro e login sem divergencia
   if (digits.length >= 12 && digits.startsWith('55')) {
     digits = digits.slice(2)
   }
-
   if (digits.length > 11) {
     digits = digits.slice(-11)
   }
-
   if (digits.length > 10 && digits.startsWith('0')) {
     digits = digits.slice(1)
   }
-
   return digits
 }
 
@@ -155,97 +236,326 @@ async function sendVerificationCodeByTwilio({ phone, code, role }) {
   }
 }
 
-function authRequired(req, res, next) {
-  const raw = req.headers.authorization || ''
-  const token = raw.startsWith('Bearer ') ? raw.slice(7) : ''
-  if (!token) {
-    res.status(401).json({ error: 'Token ausente.' })
-    return
+function mapDriver(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    phone: row.phone,
+    city: row.city,
+    vehicleModel: row.vehicle_model,
+    vehicleYear: row.vehicle_year,
+    vehiclePlate: row.vehicle_plate,
+    vehicleCategory: row.vehicle_category,
+    slug: row.slug,
+    isActive: row.is_active,
+    tariffsEnabled: row.tariffs_enabled,
+    tariffs: row.tariffs,
+    password: row.password,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
-  const session = sessions.get(token)
-  if (!session) {
-    res.status(401).json({ error: 'Sessao invalida.' })
-    return
-  }
-  req.session = session
-  req.token = token
-  next()
 }
 
-function adminRequired(req, res, next) {
-  if (req.session?.role !== 'admin') {
-    res.status(403).json({ error: 'Acesso restrito ao admin.' })
-    return
+function mapPassenger(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    password: row.password,
+    phone: row.phone,
+    address: row.address,
+    status: row.status,
+    driverSlug: row.driver_slug,
+    phoneVerifiedAt: row.phone_verified_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
-  next()
 }
 
-function passengerRequired(req, res, next) {
-  if (req.session?.role !== 'passenger') {
-    res.status(403).json({ error: 'Acesso restrito ao passageiro autenticado.' })
-    return
+function mapRide(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    passengerEmail: row.passenger_email,
+    passengerName: row.passenger_name,
+    driverId: row.driver_id,
+    driverSlug: row.driver_slug,
+    origin: row.origin,
+    destination: row.destination,
+    pickupDistance: row.pickup_distance,
+    destinationTime: row.destination_time,
+    distanceKm: Number(row.distance_km || 0),
+    durationMin: Number(row.duration_min || 0),
+    tripDate: row.trip_date,
+    tripTime: row.trip_time,
+    estimatedFare: row.estimated_fare ? Number(row.estimated_fare) : 0,
+    estimatedPrice: row.estimated_price,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
-  next()
 }
 
-function findPassengerBySession(session) {
-  const passengerId = String(session?.id || '')
-  if (passengerId) {
-    const byId = passengers.find((item) => String(item.id) === passengerId)
+async function driverSlugExists(slug) {
+  const { rowCount } = await pool.query('select 1 from drivers where slug = $1 limit 1', [slug])
+  return rowCount > 0
+}
+
+async function buildDriverSlug(fullName) {
+  const base = slugify(fullName) || `motorista-${Date.now()}`
+  let candidate = base
+  let attempt = 1
+  while (await driverSlugExists(candidate)) {
+    candidate = `${base}-${attempt}`
+    attempt += 1
+  }
+  return candidate
+}
+
+async function createDriver(data) {
+  const slug = await buildDriverSlug(data.fullName)
+  const id = `DRV-${Date.now()}`
+  const tariffs = data.tariffs || { perKm: '3,80', perMinute: '0,55', displacementFee: '5,00' }
+  const { rows } = await pool.query(
+    `insert into drivers (
+      id, full_name, email, phone, city, vehicle_model, vehicle_year, vehicle_plate,
+      vehicle_category, slug, is_active, tariffs_enabled, tariffs, created_at, updated_at
+    ) values (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,true,$11,now(),now()
+    ) returning *`,
+    [
+      id,
+      data.fullName,
+      data.email.toLowerCase(),
+      normalizePhone(data.phone),
+      data.city || '',
+      data.vehicleModel || '',
+      data.vehicleYear || '',
+      data.vehiclePlate || '',
+      data.vehicleCategory || '',
+      slug,
+      tariffs,
+    ],
+  )
+  return mapDriver(rows[0])
+}
+
+async function getDriverByIdentifier(identifier) {
+  const value = String(identifier || '').trim().toLowerCase()
+  if (!value) return null
+  const { rows } = await pool.query(
+    `select * from drivers where lower(id) = $1 or lower(slug) = $1 or lower(email) = $1 limit 1`,
+    [value],
+  )
+  return mapDriver(rows[0])
+}
+
+async function listDrivers() {
+  const { rows } = await pool.query('select * from drivers order by created_at desc')
+  return rows.map(mapDriver)
+}
+
+async function updateDriver(id, patch) {
+  const fields = []
+  const values = []
+  let idx = 1
+  if (typeof patch.isActive === 'boolean') {
+    fields.push(`is_active = $${idx++}`)
+    values.push(patch.isActive)
+  }
+  if (typeof patch.tariffsEnabled === 'boolean') {
+    fields.push(`tariffs_enabled = $${idx++}`)
+    values.push(patch.tariffsEnabled)
+  }
+  if (patch.password) {
+    fields.push(`password = $${idx++}`)
+    values.push(patch.password.trim())
+  }
+  if (patch.tariffs) {
+    fields.push(`tariffs = $${idx++}`)
+    values.push(patch.tariffs)
+  }
+  if (fields.length === 0) return await getDriverByIdentifier(id)
+  fields.push(`updated_at = now()`)
+  values.push(id)
+  const { rows } = await pool.query(
+    `update drivers set ${fields.join(', ')} where id = $${idx} returning *`,
+    values,
+  )
+  return mapDriver(rows[0])
+}
+
+async function deleteDriver(id) {
+  const { rowCount } = await pool.query('delete from drivers where id = $1', [id])
+  return rowCount > 0
+}
+
+async function createPassenger(data) {
+  const id = `PS-${Date.now()}`
+  const { rows } = await pool.query(
+    `insert into passengers (
+      id, full_name, email, password, phone, address, status, driver_slug, phone_verified_at, created_at, updated_at
+    ) values (
+      $1,$2,$3,$4,$5,$6,'active',$7,now(),now(),now()
+    ) returning *`,
+    [
+      id,
+      data.fullName,
+      data.email.toLowerCase(),
+      data.password,
+      normalizePhone(data.phone),
+      data.address || '',
+      data.driverSlug || '',
+    ],
+  )
+  return mapPassenger(rows[0])
+}
+
+async function getPassengerById(id) {
+  const { rows } = await pool.query('select * from passengers where id = $1 limit 1', [id])
+  return mapPassenger(rows[0])
+}
+
+async function getPassengerByEmail(email) {
+  const { rows } = await pool.query('select * from passengers where lower(email) = $1 limit 1', [email.toLowerCase()])
+  return mapPassenger(rows[0])
+}
+
+async function passengerExistsByPhone(phone) {
+  const { rowCount } = await pool.query('select 1 from passengers where phone = $1 limit 1', [normalizePhone(phone)])
+  return rowCount > 0
+}
+
+async function findPassengerByCredentials({ email, phone, password }) {
+  const where = []
+  const params = []
+  let idx = 1
+  if (email) {
+    where.push(`lower(email) = $${idx++}`)
+    params.push(email.toLowerCase())
+  }
+  if (phone) {
+    where.push(`phone = $${idx++}`)
+    params.push(normalizePhone(phone))
+  }
+  if (where.length === 0) return null
+  params.push(password)
+  const { rows } = await pool.query(
+    `select * from passengers where (${where.join(' or ')}) and password = $${idx} limit 1`,
+    params,
+  )
+  return mapPassenger(rows[0])
+}
+
+async function listPassengers() {
+  const { rows } = await pool.query('select * from passengers order by created_at desc')
+  return rows.map(mapPassenger)
+}
+
+async function updatePassengerStatus(id, status) {
+  const { rows } = await pool.query(
+    'update passengers set status = $1, updated_at = now() where id = $2 returning *',
+    [status, id],
+  )
+  return mapPassenger(rows[0])
+}
+
+async function deletePassenger(id) {
+  const { rowCount } = await pool.query('delete from passengers where id = $1', [id])
+  return rowCount > 0
+}
+
+async function linkPassengerToDriver(passengerId, driverId) {
+  const linkId = `PM-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+  await pool.query(
+    `insert into passenger_driver_links (id, passenger_id, driver_id)
+     values ($1,$2,$3) on conflict do nothing`,
+    [linkId, passengerId, driverId],
+  )
+}
+
+async function listPassengerDrivers(passengerId) {
+  const { rows } = await pool.query(
+    `select d.* from passenger_driver_links l
+     join drivers d on d.id = l.driver_id
+     where l.passenger_id = $1
+     order by l.created_at desc`,
+    [passengerId],
+  )
+  return rows.map(mapDriver)
+}
+
+async function createRide(data, driver) {
+  const id = `RIDE-${Date.now()}`
+  const { rows } = await pool.query(
+    `insert into rides (
+      id, passenger_email, passenger_name, driver_id, driver_slug, origin, destination, pickup_distance,
+      destination_time, distance_km, duration_min, trip_date, trip_time, estimated_fare, estimated_price,
+      status, created_at, updated_at
+    ) values (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',now(),now()
+    ) returning *`,
+    [
+      id,
+      data.passengerEmail || '',
+      data.passengerName || 'Passageiro',
+      driver?.id || null,
+      driver?.slug || null,
+      data.origin || '',
+      data.destination || '',
+      data.pickupDistance || '',
+      data.destinationTime || '',
+      Number(data.distanceKm || 0),
+      Number(data.durationMin || 0),
+      data.tripDate || '',
+      data.tripTime || '',
+      Number(data.estimatedFare || 0),
+      data.estimatedPrice || '',
+    ],
+  )
+  return mapRide(rows[0])
+}
+
+async function listRides() {
+  const { rows } = await pool.query('select * from rides order by created_at desc')
+  return rows.map(mapRide)
+}
+
+async function updateRideStatus(id, status) {
+  const { rows } = await pool.query(
+    'update rides set status = $1, updated_at = now() where id = $2 returning *',
+    [status, id],
+  )
+  return mapRide(rows[0])
+}
+
+async function findPassengerBySession(session) {
+  if (!session) return null
+  if (session.id) {
+    const byId = await getPassengerById(session.id)
     if (byId) return byId
   }
-  const email = String(session?.email || '').trim().toLowerCase()
-  if (email) return passengers.find((item) => String(item.email || '').trim().toLowerCase() === email)
+  if (session.email) {
+    return await getPassengerByEmail(session.email)
+  }
   return null
 }
 
-function findDriverByIdentifier(identifier) {
-  const value = String(identifier || '').trim().toLowerCase()
-  if (!value) return null
-  return drivers.find((item) => (
-    String(item.id || '').trim().toLowerCase() === value
-    || String(item.slug || '').trim().toLowerCase() === value
-    || String(item.email || '').trim().toLowerCase() === value
-  )) || null
-}
-
-function linkPassengerToDriver(passengerId, driverId) {
-  const pid = String(passengerId || '').trim()
-  const did = String(driverId || '').trim()
-  if (!pid || !did) return null
-  const existing = passengerDriverLinks.find((link) => (
-    String(link.passengerId) === pid && String(link.driverId) === did
-  ))
-  if (existing) return existing
-  const created = {
-    id: `PM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    passengerId: pid,
-    driverId: did,
-    createdAt: new Date().toISOString(),
-  }
-  passengerDriverLinks.unshift(created)
-  return created
-}
-
-function listPassengerDrivers(passengerId) {
-  const pid = String(passengerId || '').trim()
-  if (!pid) return []
-  const linkedIds = passengerDriverLinks
-    .filter((link) => String(link.passengerId) === pid)
-    .map((link) => String(link.driverId))
-  return drivers.filter((driver) => linkedIds.includes(String(driver.id)))
-}
-
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', asyncHandler(async (_req, res) => {
+  const { rows } = await pool.query('select 1 as ok')
   res.json({
     status: 'ok',
     service: SERVICE_NAME,
     now: new Date().toISOString(),
-    version: '1.0.0',
+    version: '1.1.0',
+    db: rows[0]?.ok === 1 ? 'connected' : 'unknown',
   })
-})
+}))
 
-app.post('/api/verification/send', (req, res) => {
+app.post('/api/verification/send', asyncHandler((req, res) => {
   const role = String(req.body?.role || '').trim().toLowerCase()
   const phone = normalizePhone(req.body?.phone)
 
@@ -299,9 +609,9 @@ app.post('/api/verification/send', (req, res) => {
   }
 
   res.status(400).json({ error: 'Provedor de WhatsApp invalido. Use "demo" ou "twilio".' })
-})
+}))
 
-app.post('/api/auth/admin/login', (req, res) => {
+app.post('/api/auth/admin/login', asyncHandler((req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
   const password = String(req.body?.password || '').trim()
   if (!email || !password) {
@@ -316,63 +626,83 @@ app.post('/api/auth/admin/login', (req, res) => {
   const session = { role: 'admin', email, loginAt: new Date().toISOString() }
   sessions.set(token, session)
   res.json({ token, user: session })
-})
+}))
 
-app.post('/api/auth/logout', authRequired, (req, res) => {
-  sessions.delete(req.token)
+app.post('/api/auth/logout', asyncHandler((req, res) => {
+  const raw = req.headers.authorization || ''
+  const token = raw.startsWith('Bearer ') ? raw.slice(7) : ''
+  if (token) sessions.delete(token)
   res.json({ ok: true })
-})
+}))
 
-app.get('/api/admin/me', authRequired, adminRequired, (req, res) => {
+function authRequired(req, res, next) {
+  const raw = req.headers.authorization || ''
+  const token = raw.startsWith('Bearer ') ? raw.slice(7) : ''
+  if (!token) {
+    res.status(401).json({ error: 'Token ausente.' })
+    return
+  }
+  const session = sessions.get(token)
+  if (!session) {
+    res.status(401).json({ error: 'Sessao invalida.' })
+    return
+  }
+  req.session = session
+  req.token = token
+  next()
+}
+
+function adminRequired(req, res, next) {
+  if (req.session?.role !== 'admin') {
+    res.status(403).json({ error: 'Acesso restrito ao admin.' })
+    return
+  }
+  next()
+}
+
+function passengerRequired(req, res, next) {
+  if (req.session?.role !== 'passenger') {
+    res.status(403).json({ error: 'Acesso restrito ao passageiro autenticado.' })
+    return
+  }
+  next()
+}
+
+app.get('/api/admin/me', authRequired, adminRequired, asyncHandler((req, res) => {
   res.json({ user: req.session })
-})
+}))
 
-app.get('/api/admin/drivers', authRequired, adminRequired, (_req, res) => {
-  res.json({ drivers })
-})
+app.get('/api/admin/drivers', authRequired, adminRequired, asyncHandler(async (_req, res) => {
+  res.json({ drivers: await listDrivers() })
+}))
 
-app.patch('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
+app.patch('/api/admin/drivers/:id', authRequired, adminRequired, asyncHandler(async (req, res) => {
   const id = decodeURIComponent(String(req.params.id || ''))
-  const driver = findDriverByIdentifier(id)
+  const driver = await getDriverByIdentifier(id)
   if (!driver) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
   }
-
   const patch = req.body || {}
-  if (typeof patch.isActive === 'boolean') driver.isActive = patch.isActive
-  if (typeof patch.tariffsEnabled === 'boolean') driver.tariffsEnabled = patch.tariffsEnabled
-  if (typeof patch.password === 'string' && patch.password.trim()) {
-    driver.password = patch.password.trim()
-  }
-  if (patch.tariffs && typeof patch.tariffs === 'object') {
-    driver.tariffs = {
-      perKm: String(patch.tariffs.perKm || driver.tariffs?.perKm || '3,80'),
-      perMinute: String(patch.tariffs.perMinute || driver.tariffs?.perMinute || '0,55'),
-      displacementFee: String(patch.tariffs.displacementFee || driver.tariffs?.displacementFee || '5,00'),
-    }
-  }
-  driver.updatedAt = new Date().toISOString()
-  res.json({ driver })
-})
+  const updated = await updateDriver(driver.id, patch)
+  res.json({ driver: updated })
+}))
 
-app.delete('/api/admin/drivers/:id', authRequired, adminRequired, (req, res) => {
+app.delete('/api/admin/drivers/:id', authRequired, adminRequired, asyncHandler(async (req, res) => {
   const id = decodeURIComponent(String(req.params.id || ''))
-  const driver = findDriverByIdentifier(id)
-  const index = driver ? drivers.findIndex((item) => item === driver) : -1
-  if (index < 0) {
+  const ok = await deleteDriver(id)
+  if (!ok) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
   }
-  drivers.splice(index, 1)
   res.json({ ok: true })
-})
+}))
 
-app.get('/api/admin/passengers', authRequired, adminRequired, (_req, res) => {
-  res.json({ passengers })
-})
+app.get('/api/admin/passengers', authRequired, adminRequired, asyncHandler(async (_req, res) => {
+  res.json({ passengers: await listPassengers() })
+}))
 
-app.patch('/api/admin/passengers/:id/status', authRequired, adminRequired, (req, res) => {
+app.patch('/api/admin/passengers/:id/status', authRequired, adminRequired, asyncHandler(async (req, res) => {
   const id = String(req.params.id || '')
   const nextStatus = String(req.body?.status || '').trim()
   const accepted = ['active', 'pending', 'inactive']
@@ -380,28 +710,25 @@ app.patch('/api/admin/passengers/:id/status', authRequired, adminRequired, (req,
     res.status(400).json({ error: 'Status invalido.' })
     return
   }
-  const passenger = passengers.find((item) => String(item.id) === id)
+  const passenger = await updatePassengerStatus(id, nextStatus)
   if (!passenger) {
     res.status(404).json({ error: 'Passageiro nao encontrado.' })
     return
   }
-  passenger.status = nextStatus
-  passenger.updatedAt = new Date().toISOString()
   res.json({ passenger })
-})
+}))
 
-app.delete('/api/admin/passengers/:id', authRequired, adminRequired, (req, res) => {
+app.delete('/api/admin/passengers/:id', authRequired, adminRequired, asyncHandler(async (req, res) => {
   const id = String(req.params.id || '')
-  const index = passengers.findIndex((item) => String(item.id) === id)
-  if (index < 0) {
+  const ok = await deletePassenger(id)
+  if (!ok) {
     res.status(404).json({ error: 'Passageiro nao encontrado.' })
     return
   }
-  passengers.splice(index, 1)
   res.json({ ok: true })
-})
+}))
 
-app.post('/api/drivers/signup', (req, res) => {
+app.post('/api/drivers/signup', asyncHandler(async (req, res) => {
   const fullName = String(req.body?.fullName || '').trim()
   const email = String(req.body?.email || '').trim().toLowerCase()
   const phone = String(req.body?.phone || '').trim()
@@ -415,39 +742,31 @@ app.post('/api/drivers/signup', (req, res) => {
     res.status(400).json({ error: 'Campos obrigatorios faltando no cadastro do motorista.' })
     return
   }
-  if (drivers.some((driver) => driver.email === email)) {
+  const existing = await getDriverByIdentifier(email)
+  if (existing) {
     res.status(409).json({ error: 'Ja existe motorista com esse e-mail.' })
     return
   }
-  const created = {
-    id: `DRV-${Date.now()}`,
+  const created = await createDriver({
     fullName,
     email,
     phone,
-    city,
     vehicleModel,
     vehicleYear,
     vehiclePlate,
     vehicleCategory,
-    slug: slugify(fullName) || `motorista-${Date.now()}`,
-    isActive: true,
-    tariffsEnabled: true,
-    tariffs: { perKm: '3,80', perMinute: '0,55', displacementFee: '5,00' },
-    phoneVerifiedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-  }
-
-  drivers.unshift(created)
+    city,
+  })
   res.status(201).json({ driver: created })
-})
+}))
 
-app.post('/api/drivers/login', (req, res) => {
+app.post('/api/drivers/login', asyncHandler(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
   if (!email) {
     res.status(400).json({ error: 'Informe o e-mail do motorista.' })
     return
   }
-  const driver = drivers.find((item) => item.email === email)
+  const driver = await getDriverByIdentifier(email)
   if (!driver) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
@@ -457,11 +776,11 @@ app.post('/api/drivers/login', (req, res) => {
     return
   }
   res.json({ driver })
-})
+}))
 
-app.patch('/api/drivers/:id/tariffs', (req, res) => {
+app.patch('/api/drivers/:id/tariffs', asyncHandler(async (req, res) => {
   const id = String(req.params.id || '').trim()
-  const driver = drivers.find((item) => String(item.id) === id)
+  const driver = await getDriverByIdentifier(id)
   if (!driver) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
@@ -470,20 +789,20 @@ app.patch('/api/drivers/:id/tariffs', (req, res) => {
     res.status(403).json({ error: 'Motorista desativado pelo admin.' })
     return
   }
-
   const patchTariffs = req.body?.tariffs || req.body || {}
-  driver.tariffs = {
-    perKm: String(patchTariffs.perKm || driver?.tariffs?.perKm || '3,80'),
-    perMinute: String(patchTariffs.perMinute || driver?.tariffs?.perMinute || '0,55'),
-    displacementFee: String(patchTariffs.displacementFee || driver?.tariffs?.displacementFee || '5,00'),
-  }
-  driver.updatedAt = new Date().toISOString()
-  res.json({ driver })
-})
+  const updated = await updateDriver(driver.id, {
+    tariffs: {
+      perKm: String(patchTariffs.perKm || driver?.tariffs?.perKm || '3,80'),
+      perMinute: String(patchTariffs.perMinute || driver?.tariffs?.perMinute || '0,55'),
+      displacementFee: String(patchTariffs.displacementFee || driver?.tariffs?.displacementFee || '5,00'),
+    },
+  })
+  res.json({ driver: updated })
+}))
 
-app.get('/api/drivers/:slug/public', (req, res) => {
+app.get('/api/drivers/:slug/public', asyncHandler(async (req, res) => {
   const slug = String(req.params.slug || '').trim().toLowerCase()
-  const driver = drivers.find((item) => item.slug === slug)
+  const driver = await getDriverByIdentifier(slug)
   if (!driver) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
@@ -505,9 +824,9 @@ app.get('/api/drivers/:slug/public', (req, res) => {
       },
     },
   })
-})
+}))
 
-app.post('/api/passengers/signup', (req, res) => {
+app.post('/api/passengers/signup', asyncHandler(async (req, res) => {
   const fullName = String(req.body?.fullName || '').trim()
   const email = String(req.body?.email || '').trim().toLowerCase()
   const password = String(req.body?.password || '').trim()
@@ -523,16 +842,16 @@ app.post('/api/passengers/signup', (req, res) => {
     res.status(400).json({ error: 'Campos obrigatorios faltando no cadastro do passageiro.' })
     return
   }
-  if (passengers.some((item) => item.email === email)) {
+  if (await getPassengerByEmail(email)) {
     res.status(409).json({ error: 'Ja existe passageiro com esse e-mail.' })
     return
   }
-  if (phone && passengers.some((item) => normalizePhone(item.phone) === phone)) {
+  if (await passengerExistsByPhone(phone)) {
     res.status(409).json({ error: 'Ja existe passageiro com esse telefone.' })
     return
   }
 
-  const driver = findDriverByIdentifier(driverSlug)
+  const driver = await getDriverByIdentifier(driverSlug)
   if (!driver) {
     res.status(404).json({ error: 'Motorista do QR/link nao encontrado.' })
     return
@@ -541,39 +860,30 @@ app.post('/api/passengers/signup', (req, res) => {
     res.status(403).json({ error: 'Motorista desativado pelo admin.' })
     return
   }
-  const created = {
-    id: `PS-${Date.now()}`,
+  const created = await createPassenger({
     fullName,
     email,
     password,
     phone,
     address,
-    status: 'active',
-    phoneVerifiedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
     driverSlug: driver.slug,
-  }
-
-  passengers.unshift(created)
-  linkPassengerToDriver(created.id, driver.id)
-
+  })
+  await linkPassengerToDriver(created.id, driver.id)
   const token = createToken()
   const session = { role: 'passenger', email: created.email, id: created.id }
   sessions.set(token, session)
-  res.status(201).json({ token, passenger: created, linkedDriver: { id: driver.id, slug: driver.slug, fullName: driver.fullName } })
-})
+  res.status(201).json({
+    token,
+    passenger: created,
+    linkedDriver: { id: driver.id, slug: driver.slug, fullName: driver.fullName },
+  })
+}))
 
-app.post('/api/passengers/login', (req, res) => {
+app.post('/api/passengers/login', asyncHandler(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
   const phone = normalizePhone(req.body?.phone)
   const password = String(req.body?.password || '').trim()
-  const passenger = passengers.find((item) => (
-    item.password === password
-    && (
-      (email && String(item.email || '').trim().toLowerCase() === email)
-      || (phone && normalizePhone(item.phone) === phone)
-    )
-  ))
+  const passenger = await findPassengerByCredentials({ email, phone, password })
   if (!passenger) {
     res.status(401).json({ error: 'Credenciais invalidas.' })
     return
@@ -581,19 +891,23 @@ app.post('/api/passengers/login', (req, res) => {
   const token = createToken()
   const session = { role: 'passenger', email: passenger.email, id: passenger.id }
   sessions.set(token, session)
-  const linkedDrivers = listPassengerDrivers(passenger.id).map((driver) => ({
-    id: driver.id,
-    slug: driver.slug,
-    fullName: driver.fullName,
-    isActive: driver.isActive !== false,
-    whatsapp: driver.phone,
-    city: driver.city,
-    vehicleModel: driver.vehicleModel,
-  }))
-  res.json({ token, passenger, linkedDrivers })
-})
+  const linkedDrivers = await listPassengerDrivers(passenger.id)
+  res.json({
+    token,
+    passenger,
+    linkedDrivers: linkedDrivers.map((driver) => ({
+      id: driver.id,
+      slug: driver.slug,
+      fullName: driver.fullName,
+      isActive: driver.isActive !== false,
+      whatsapp: driver.phone,
+      city: driver.city,
+      vehicleModel: driver.vehicleModel,
+    })),
+  })
+}))
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const fullName = String(req.body?.nome || req.body?.fullName || '').trim()
   const phone = normalizePhone(req.body?.telefone || req.body?.phone)
   const password = String(req.body?.senha || req.body?.password || '').trim()
@@ -614,24 +928,24 @@ app.post('/api/auth/register', (req, res) => {
     res.status(400).json({ error: 'Informe nome, telefone e senha para cadastrar.' })
     return
   }
-  let passenger = passengers.find((item) => String(item.phone || '').trim() === phone)
+
+  let passenger = await getPassengerByEmail(email)
+  if (!passenger && (await passengerExistsByPhone(phone))) {
+    res.status(409).json({ error: 'Ja existe passageiro com esse telefone.' })
+    return
+  }
   if (!passenger) {
-    passenger = {
-      id: `PS-${Date.now()}`,
+    passenger = await createPassenger({
       fullName,
       email,
       password,
       phone,
       address,
-      status: 'active',
-      phoneVerifiedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
       driverSlug: '',
-    }
-    passengers.unshift(passenger)
+    })
   }
 
-  const driver = findDriverByIdentifier(driverIdentifier)
+  const driver = await getDriverByIdentifier(driverIdentifier)
   if (!driver) {
     res.status(404).json({ error: 'Motorista do link nao encontrado.' })
     return
@@ -640,7 +954,7 @@ app.post('/api/auth/register', (req, res) => {
     res.status(403).json({ error: 'Motorista desativado pelo admin.' })
     return
   }
-  linkPassengerToDriver(passenger.id, driver.id)
+  await linkPassengerToDriver(passenger.id, driver.id)
   passenger.driverSlug = passenger.driverSlug || driver.slug
 
   const token = createToken()
@@ -652,9 +966,9 @@ app.post('/api/auth/register', (req, res) => {
     passenger,
     linkedDriver: { id: driver.id, slug: driver.slug, fullName: driver.fullName },
   })
-})
+}))
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
   const phone = normalizePhone(req.body?.telefone || req.body?.phone)
   const password = String(req.body?.senha || req.body?.password || '').trim()
@@ -664,13 +978,7 @@ app.post('/api/auth/login', (req, res) => {
     return
   }
 
-  const passenger = passengers.find((item) => (
-    item.password === password
-    && (
-      (email && String(item.email || '').trim().toLowerCase() === email)
-      || (phone && normalizePhone(item.phone) === phone)
-    )
-  ))
+  const passenger = await findPassengerByCredentials({ email, phone, password })
   if (!passenger) {
     res.status(401).json({ error: 'Credenciais invalidas.' })
     return
@@ -680,46 +988,48 @@ app.post('/api/auth/login', (req, res) => {
   const session = { role: 'passenger', email: passenger.email, id: passenger.id }
   sessions.set(token, session)
 
-  const linkedDrivers = listPassengerDrivers(passenger.id).map((driver) => ({
-    id: driver.id,
-    slug: driver.slug,
-    fullName: driver.fullName,
-    isActive: driver.isActive !== false,
-    whatsapp: driver.phone,
-    city: driver.city,
-    vehicleModel: driver.vehicleModel,
-    vehiclePlate: driver.vehiclePlate,
-  }))
-  res.json({ token, passenger, linkedDrivers })
-})
+  const linkedDrivers = await listPassengerDrivers(passenger.id)
+  res.json({
+    token,
+    passenger,
+    linkedDrivers: linkedDrivers.map((driver) => ({
+      id: driver.id,
+      slug: driver.slug,
+      fullName: driver.fullName,
+      isActive: driver.isActive !== false,
+      whatsapp: driver.phone,
+      city: driver.city,
+      vehicleModel: driver.vehicleModel,
+      vehiclePlate: driver.vehiclePlate,
+    })),
+  })
+}))
 
-app.get('/api/passengers/me/drivers', authRequired, passengerRequired, (req, res) => {
-  const passenger = findPassengerBySession(req.session)
+app.get('/api/passengers/me/drivers', authRequired, passengerRequired, asyncHandler(async (req, res) => {
+  const passenger = await findPassengerBySession(req.session)
   if (!passenger) {
     res.status(404).json({ error: 'Passageiro nao encontrado na sessao.' })
     return
   }
-  const linkedDrivers = listPassengerDrivers(passenger.id).map((driver) => ({
-    id: driver.id,
-    slug: driver.slug,
-    fullName: driver.fullName,
-    isActive: driver.isActive !== false,
-    whatsapp: driver.phone,
-    city: driver.city,
-    vehicleModel: driver.vehicleModel,
-    vehiclePlate: driver.vehiclePlate,
-    tariffsEnabled: driver.tariffsEnabled !== false,
-    tariffs: {
-      perKm: String(driver?.tariffs?.perKm || '3,80'),
-      perMinute: String(driver?.tariffs?.perMinute || '0,55'),
-      displacementFee: String(driver?.tariffs?.displacementFee || '5,00'),
-    },
-  }))
-  res.json({ drivers: linkedDrivers })
-})
+  const linkedDrivers = await listPassengerDrivers(passenger.id)
+  res.json({
+    drivers: linkedDrivers.map((driver) => ({
+      id: driver.id,
+      slug: driver.slug,
+      fullName: driver.fullName,
+      isActive: driver.isActive !== false,
+      whatsapp: driver.phone,
+      city: driver.city,
+      vehicleModel: driver.vehicleModel,
+      vehiclePlate: driver.vehiclePlate,
+      tariffsEnabled: driver.tariffsEnabled !== false,
+      tariffs: driver.tariffs,
+    })),
+  })
+}))
 
-app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, res) => {
-  const passenger = findPassengerBySession(req.session)
+app.post('/api/passengers/me/drivers', authRequired, passengerRequired, asyncHandler(async (req, res) => {
+  const passenger = await findPassengerBySession(req.session)
   if (!passenger) {
     res.status(404).json({ error: 'Passageiro nao encontrado na sessao.' })
     return
@@ -729,7 +1039,7 @@ app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, re
     res.status(400).json({ error: 'Informe o identificador do motorista para vincular.' })
     return
   }
-  const driver = findDriverByIdentifier(identifier)
+  const driver = await getDriverByIdentifier(identifier)
   if (!driver) {
     res.status(404).json({ error: 'Motorista nao encontrado.' })
     return
@@ -738,10 +1048,9 @@ app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, re
     res.status(403).json({ error: 'Motorista desativado pelo admin.' })
     return
   }
-  const link = linkPassengerToDriver(passenger.id, driver.id)
+  await linkPassengerToDriver(passenger.id, driver.id)
   passenger.driverSlug = passenger.driverSlug || driver.slug
   res.status(201).json({
-    link,
     driver: {
       id: driver.id,
       slug: driver.slug,
@@ -751,9 +1060,9 @@ app.post('/api/passengers/me/drivers', authRequired, passengerRequired, (req, re
       city: driver.city,
     },
   })
-})
+}))
 
-app.post('/api/rides', (req, res) => {
+app.post('/api/rides', asyncHandler(async (req, res) => {
   const passengerTokenRaw = String(req.headers.authorization || '')
   const passengerToken = passengerTokenRaw.startsWith('Bearer ') ? passengerTokenRaw.slice(7) : ''
   const passengerSession = passengerToken ? sessions.get(passengerToken) : null
@@ -765,12 +1074,12 @@ app.post('/api/rides', (req, res) => {
   }
 
   if (passengerSession?.role === 'passenger') {
-    const passenger = findPassengerBySession(passengerSession)
+    const passenger = await findPassengerBySession(passengerSession)
     if (!passenger) {
       res.status(401).json({ error: 'Passageiro da sessao nao encontrado.' })
       return
     }
-    const linkedDrivers = listPassengerDrivers(passenger.id)
+    const linkedDrivers = await listPassengerDrivers(passenger.id)
     const hasAccess = linkedDrivers.some((driver) => (
       String(driver.slug || '').trim().toLowerCase() === requestedDriverSlug
       || String(driver.id || '').trim().toLowerCase() === requestedDriverSlug
@@ -781,7 +1090,7 @@ app.post('/api/rides', (req, res) => {
     }
   }
 
-  const requestedDriver = findDriverByIdentifier(requestedDriverSlug)
+  const requestedDriver = await getDriverByIdentifier(requestedDriverSlug)
   if (!requestedDriver) {
     res.status(404).json({ error: 'Motorista nao encontrado para essa solicitacao.' })
     return
@@ -791,57 +1100,36 @@ app.post('/api/rides', (req, res) => {
     return
   }
 
-  const ride = {
-    id: Date.now(),
-    passengerName: String(req.body?.passengerName || 'Passageiro'),
-    passengerEmail: String(req.body?.passengerEmail || ''),
-    driverSlug: requestedDriverSlug || '',
-    driverName: String(req.body?.driverName || 'Motorista'),
-    origin: String(req.body?.origin || ''),
-    destination: String(req.body?.destination || ''),
-    pickupDistance: String(req.body?.pickupDistance || ''),
-    destinationTime: String(req.body?.destinationTime || ''),
-    distanceKm: Number(req.body?.distanceKm || 0),
-    durationMin: Number(req.body?.durationMin || 0),
-    tripDate: String(req.body?.tripDate || ''),
-    tripTime: String(req.body?.tripTime || ''),
-    estimatedFare: Number(req.body?.estimatedFare || 0),
-    estimatedPrice: String(req.body?.estimatedPrice || ''),
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  }
-  rides.unshift(ride)
+  const ride = await createRide(req.body || {}, requestedDriver)
   res.status(201).json({ ride })
-})
+}))
 
-app.get('/api/rides', (_req, res) => {
-  res.json({ rides })
-})
+app.get('/api/rides', asyncHandler(async (_req, res) => {
+  res.json({ rides: await listRides() })
+}))
 
-app.patch('/api/rides/:id/status', (req, res) => {
-  const id = Number(req.params.id)
+app.patch('/api/rides/:id/status', asyncHandler(async (req, res) => {
+  const id = String(req.params.id || '')
   const nextStatus = String(req.body?.status || '').trim()
   const accepted = ['pending', 'accepted', 'declined', 'canceled']
   if (!accepted.includes(nextStatus)) {
     res.status(400).json({ error: 'Status invalido.' })
     return
   }
-  const ride = rides.find((item) => Number(item.id) === id)
+  const ride = await updateRideStatus(id, nextStatus)
   if (!ride) {
     res.status(404).json({ error: 'Corrida nao encontrada.' })
     return
   }
-  ride.status = nextStatus
-  ride.updatedAt = new Date().toISOString()
   res.json({ ride })
-})
+}))
 
-app.get('/api/chat/:rideId/messages', (req, res) => {
+app.get('/api/chat/:rideId/messages', asyncHandler((req, res) => {
   const rideId = String(req.params.rideId)
   res.json({ messages: chatsByRide.get(rideId) || [] })
-})
+}))
 
-app.post('/api/chat/:rideId/messages', (req, res) => {
+app.post('/api/chat/:rideId/messages', asyncHandler((req, res) => {
   const rideId = String(req.params.rideId)
   const sender = String(req.body?.sender || '').trim()
   const text = String(req.body?.text || '').trim()
@@ -858,7 +1146,7 @@ app.post('/api/chat/:rideId/messages', (req, res) => {
   }
   chatsByRide.set(rideId, [...current, message])
   res.status(201).json({ message })
-})
+}))
 
 app.use((err, _req, res, _next) => {
   console.error(err)
