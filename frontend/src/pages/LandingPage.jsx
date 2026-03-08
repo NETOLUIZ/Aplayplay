@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 function LandingPage() {
   return (
-    <>
+    <div className="landing-modern">
       <section className="hero">
         <div className="hero__glow hero__glow--right" aria-hidden="true" />
         <div className="hero__glow hero__glow--left" aria-hidden="true" />
@@ -12,7 +12,7 @@ function LandingPage() {
           <div className="hero__content">
             <p className="hero-badge">
               <span className="hero-badge__dot" />
-              Nova versao 2.0 disponivel
+              Mobile first | Versao 2.0
             </p>
 
             <h1>
@@ -20,13 +20,14 @@ function LandingPage() {
             </h1>
 
             <p className="hero__description">
-              Gerencie clientes, agendamentos e faturamento em uma plataforma profissional.
-              Aumente seus lucros com uma operacao organizada e sem taxas abusivas.
+              Gerencie clientes, agendamentos e faturamento com uma experiencia realmente mobile first.
+              Um painel unico para manter a operacao organizada, previsivel e mais lucrativa.
             </p>
 
             <div className="hero__checks">
-              <span>✓ Teste gratis de 14 dias</span>
-              <span>✓ Sem necessidade de cartao</span>
+              <span>14 dias gratis</span>
+              <span>Sem cartao de credito</span>
+              <span>Fluxos pensados para celular</span>
             </div>
           </div>
 
@@ -132,15 +133,15 @@ function LandingPage() {
                 <div className="phone-mockup__list">
                   <div>
                     <p>07:30 - Aeroporto</p>
-                    <small>Cliente VIP • Confirmado</small>
+                    <small>Cliente VIP | Confirmado</small>
                   </div>
                   <div>
                     <p>12:00 - Centro</p>
-                    <small>Executivo • Ida e volta</small>
+                    <small>Executivo | Ida e volta</small>
                   </div>
                   <div>
                     <p>18:40 - Rodoviaria</p>
-                    <small>Particular • Pagamento PIX</small>
+                    <small>Particular | Pagamento PIX</small>
                   </div>
                 </div>
                 <button type="button">Abrir horarios livres</button>
@@ -179,12 +180,8 @@ function LandingPage() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   )
 }
 
 export default LandingPage
-
-
-
-
